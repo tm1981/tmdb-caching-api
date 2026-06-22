@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  role      String   @default("admin")
+  apiKeys   ApiKey[]
+  createdAt DateTime @default(now())
+}
+
+model ApiKey {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  label     String
+  active    Boolean  @default(true)
+  owner     User     @relation(fields: [ownerId], references: [id])
+  ownerId   Int
+  createdAt DateTime @default(now())
+}
+
+model Movie {
+  id                  Int       @id @default(autoincrement())
+  tmdbId              Int       @unique
+  title               String
+  originalTitle       String
+  overview            String?
+  posterPath          String?
+  backdropPath        String?
+  releaseDate         DateTime?
+  runtime             Int?
+  voteAverage         Float?
+  voteCount           Int?
+  genres              Json?
+  productionCompanies Json?
+  spokenLanguages     Json?
+  status              String?
+  tagline             String?
+  imdbId              String?
+cast                Json?
+  crew                Json?
+  videos              Json?
+  seasons             Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model TvShow {
+  id                  Int       @id @default(autoincrement())
+  tmdbId              Int       @unique
+  name                String
+  originalName        String
+  overview            String?
+  posterPath          String?
+  backdropPath        String?
+  firstAirDate        DateTime?
+  voteAverage         Float?
+  voteCount           Int?
+  genres              Json?
+  status              String?
+  numberOfSeasons     Int?
+  numberOfEpisodes    Int?
+  originCountry       Json?
+  spokenLanguage      String?
+  cast                Json?
+  crew                Json?
+  videos              Json?
+  seasons             Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model SyncLog {
+  id        Int      @id @default(autoincrement())
+  type      String
+  tmdbId    Int?
+  status    String
+  detail    String?
+  createdAt DateTime @default(now())
+}

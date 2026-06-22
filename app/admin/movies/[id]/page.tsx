@@ -1,0 +1,469 @@
+export const dynamic = 'force-dynamic'
+
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import prisma from '@/lib/prisma'
+import { getPosterPath, getBackdropPath } from '@/lib/tmdb'
+import { formatRating, formatDate } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+import { Button } from '@/components/ui/button'
+import {
+  ArrowLeft,
+  Clock,
+  Star,
+  Users,
+  Languages,
+  Calendar,
+  Globe,
+  Link as LinkIcon,
+  Quote,
+  Film,
+  Play,
+  Clapperboard,
+  MonitorPlay,
+  User,
+} from 'lucide-react'
+
+async function getMovie(tmdbId: number) {
+  return prisma.movie.findUnique({
+    where: { tmdbId },
+  })
+}
+
+function RuntimeBadge({ runtime }: { runtime: number | null }) {
+  if (!runtime) return <span className="text-muted-foreground">N/A</span>
+  const hours = Math.floor(runtime / 60)
+  const mins = runtime % 60
+  return (
+    <span>
+      {hours > 0 ? `${hours}h ` : ''}
+      {mins}m
+    </span>
+  )
+}
+
+function RatingBadge({ voteAverage, voteCount }: { voteAverage: number | null; voteCount: number | null }) {
+  if (!voteAverage) return <span className="text-muted-foreground">No rating</span>
+
+  const color =
+    voteAverage >= 7
+      ? 'text-emerald-400'
+      : voteAverage >= 5
+      ? 'text-yellow-400'
+      : 'text-red-400'
+
+  return (
+    <div className="flex items-center gap-2">
+      <Star className={`size-6 fill-current ${color}`} />
+      <span className={`text-4xl font-bold tracking-tight ${color}`}>
+        {formatRating(voteAverage)}
+      </span>
+      <span className="text-muted-foreground">/ 10</span>
+      {voteCount && (
+        <span className="text-sm text-muted-foreground ml-2">
+          ({voteCount.toLocaleString()} votes)
+        </span>
+      )}
+    </div>
+  )
+}
+
+function CastCard({ member }: { member: { id: number; name: string; character: string; profilePath: string | null; order: number } }) {
+  return (
+    <Link
+      href={`/admin/movies?q=${encodeURIComponent(member.name)}`}
+      className="group flex-shrink-0 w-40"
+    >
+      <div className="relative overflow-hidden rounded-lg bg-muted aspect-[2/3] mb-2 ring-1 ring-white/5 group-hover:ring-white/20 transition-all">
+        {member.profilePath ? (
+          <img
+            src={getPosterPath(member.profilePath, 'w500')!}
+            alt={member.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <User className="size-10 text-muted-foreground/50" />
+          </div>
+        )}
+        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/80 to-transparent" />
+      </div>
+      <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
+        {member.name}
+      </p>
+      {member.character && (
+        <p className="text-xs text-muted-foreground truncate">
+          as {member.character}
+        </p>
+      )}
+    </Link>
+  )
+}
+
+function CrewCard({ member }: { member: { id: number; name: string; job: string; department: string; profilePath: string | null } }) {
+  return (
+    <div className="flex items-center gap-3 py-2">
+      {member.profilePath ? (
+        <img
+          src={getPosterPath(member.profilePath, 'w500')!}
+          alt={member.name}
+          className="w-10 h-10 rounded-full object-cover ring-1 ring-white/10"
+        />
+      ) : (
+        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center ring-1 ring-white/10">
+          <User className="size-4 text-muted-foreground" />
+        </div>
+      )}
+      <div>
+        <p className="text-sm font-medium">{member.name}</p>
+        <p className="text-xs text-muted-foreground">{member.job}</p>
+      </div>
+    </div>
+  )
+}
+
+export default async function MovieDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  const tmdbId = parseInt(id)
+
+  if (isNaN(tmdbId)) {
+    notFound()
+  }
+
+  const movie = await getMovie(tmdbId)
+
+  if (!movie) {
+    notFound()
+  }
+
+  const backdropUrl = getBackdropPath(movie.backdropPath, 'w1280')
+  const posterUrl = getPosterPath(movie.posterPath, 'w780')
+  const genres = movie.genres as Array<{ id: number; name: string }> | null
+  const productionCompanies = movie.productionCompanies as Array<{ id: number; name: string; logo_path: string | null; origin_country: string }> | null
+  const spokenLanguages = movie.spokenLanguages as Array<{ english_name: string; iso_639_1: string; name: string }> | null
+  const cast = movie.cast as Array<{ id: number; name: string; character: string; profilePath: string | null; order: number }> | null
+  const crew = movie.crew as Array<{ id: number; name: string; job: string; department: string; profilePath: string | null }> | null
+  const videos = movie.videos as Array<{ key: string; name: string; site: string; type: string; size: number }> | null
+
+  const trailer = videos?.find(v => v.type === 'Trailer' && v.site === 'YouTube') ||
+                  videos?.find(v => v.site === 'YouTube')
+  const directors = crew?.filter(m => m.job === 'Director') || []
+  const writers = crew?.filter(m => ['Screenplay', 'Story', 'Writer'].includes(m.job)) || []
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Hero Backdrop */}
+      {backdropUrl ? (
+        <div className="relative h-[40vh] min-h-[400px] w-full overflow-hidden">
+          <img
+            src={backdropUrl}
+            alt={movie.title}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-black/30" />
+          <div className="absolute inset-0 bg-gradient-to-r from-background/90 via-background/50 to-transparent" />
+
+          {/* Back to list link */}
+          <div className="absolute top-6 left-6 z-10">
+            <Link
+              href="/admin/movies"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-sm text-sm text-white/80 hover:text-white hover:bg-black/60 transition-colors"
+            >
+              <ArrowLeft className="size-3" />
+              Back to movies
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="h-64 bg-gradient-to-br from-gray-900 to-gray-800 relative">
+          <div className="absolute top-6 left-6 z-10">
+            <Link
+              href="/admin/movies"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-sm text-sm text-white/80 hover:text-white hover:bg-black/60 transition-colors"
+            >
+              <ArrowLeft className="size-3" />
+              Back to movies
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 -mt-32 relative z-10">
+        <div className="flex gap-10">
+          {/* Poster */}
+          <div className="flex-shrink-0 w-72">
+            {posterUrl ? (
+              <div className="relative rounded-xl overflow-hidden shadow-2xl ring-1 ring-white/10 group">
+                <img
+                  src={posterUrl}
+                  alt={movie.title}
+                  className="w-full aspect-[2/3] object-cover group-hover:scale-[1.02] transition-transform duration-500"
+                />
+              </div>
+            ) : (
+              <div className="w-full aspect-[2/3] rounded-xl bg-muted/50 flex items-center justify-center shadow-2xl ring-1 ring-white/10">
+                <Film className="size-16 text-muted-foreground/50" />
+              </div>
+            )}
+          </div>
+
+          {/* Title & Info */}
+          <div className="flex-1 pt-8 pb-4">
+            <h1 className="text-5xl font-extrabold tracking-tight leading-tight">
+              {movie.title}
+            </h1>
+            {movie.originalTitle !== movie.title && (
+              <p className="text-lg text-muted-foreground mt-1">
+                {movie.originalTitle}
+              </p>
+            )}
+
+            {movie.tagline && (
+              <div className="mt-4 flex items-start gap-2 text-muted-foreground italic text-lg">
+                <Quote className="size-5 mt-1 flex-shrink-0 opacity-50" />
+                <span>&ldquo;{movie.tagline}&rdquo;</span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-6 mt-6">
+              <RatingBadge
+                voteAverage={movie.voteAverage}
+                voteCount={movie.voteCount}
+              />
+
+              <Separator orientation="vertical" className="h-8 hidden sm:block" />
+
+              <div className="flex items-center gap-5 text-sm">
+                {movie.releaseDate && (
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <Calendar className="size-4" />
+                    {formatDate(movie.releaseDate)}
+                  </span>
+                )}
+                {movie.runtime && (
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <Clock className="size-4" />
+                    <RuntimeBadge runtime={movie.runtime} />
+                  </span>
+                )}
+                {movie.status && (
+                  <Badge variant="secondary" className="capitalize px-3 py-1">
+                    {movie.status}
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Genres */}
+            {genres && genres.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-6">
+                {genres.map((genre) => (
+                  <Badge key={genre.id} variant="outline" className="px-3 py-1 text-sm">
+                    {genre.name}
+                  </Badge>
+                ))}
+              </div>
+            )}
+
+            {/* Trailer Watch Button */}
+            {trailer && (
+              <div className="mt-6">
+                <a
+                  href={`https://www.youtube.com/watch?v=${trailer.key}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium transition-colors"
+                >
+                  <Play className="size-5 fill-current" />
+                  Watch Trailer
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <Separator className="my-10" />
+
+        {/* Overview */}
+        <div className="mb-12">
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <Film className="size-5" />
+            Overview
+          </h2>
+          <p className="text-muted-foreground leading-relaxed text-lg max-w-4xl">
+            {movie.overview || 'No overview available.'}
+          </p>
+        </div>
+
+        {/* Trailer Embedded */}
+        {trailer && (
+          <>
+            <Separator className="my-10" />
+            <div className="mb-12">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <MonitorPlay className="size-5" />
+                Trailer
+              </h2>
+              <div className="relative w-full max-w-4xl aspect-video rounded-xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/10">
+                <iframe
+                  src={`https://www.youtube.com/embed/${trailer.key}`}
+                  title={`Trailer for ${movie.title}`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="w-full h-full"
+                />
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">{trailer.name}</p>
+            </div>
+          </>
+        )}
+
+        {/* Cast */}
+        {cast && cast.length > 0 && (
+          <>
+            <Separator className="my-10" />
+            <div className="mb-12">
+              <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+                <Users className="size-5" />
+                Top Cast
+              </h2>
+              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
+                {cast.map((member) => (
+                  <CastCard key={member.id} member={member} />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Crew */}
+        {crew && crew.length > 0 && (
+          <>
+            <Separator className="my-10" />
+            <div className="mb-12">
+              <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+                <Clapperboard className="size-5" />
+                Key Crew
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2 max-w-4xl">
+                {/* Directors first */}
+                {directors.map((member, i) => (
+                  <CrewCard key={`${member.id}-${i}`} member={{ ...member, job: 'Director' }} />
+                ))}
+                {/* Then writers */}
+                {writers.map((member, i) => (
+                  <CrewCard key={`${member.id}-${i}`} member={member} />
+                ))}
+                {/* Then producers */}
+                {crew.filter(m => m.job === 'Producer').map((member, i) => (
+                  <CrewCard key={`${member.id}-${i}`} member={member} />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Detail Cards Grid */}
+        <Separator className="my-10" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+          {/* Production Companies */}
+          {productionCompanies && productionCompanies.length > 0 && (
+            <Card>
+              <CardContent className="pt-6">
+                <h3 className="text-sm font-semibold text-muted-foreground mb-4 uppercase tracking-wider">
+                  Production Companies
+                </h3>
+                <div className="flex flex-col gap-4">
+                  {productionCompanies.map((company) => (
+                    <div key={company.id} className="flex items-center gap-3">
+                      {company.logo_path && (
+                        <img
+                          src={`https://image.tmdb.org/t/p/w92${company.logo_path}`}
+                          alt={company.name}
+                          className="w-12 h-auto rounded bg-background p-1.5"
+                        />
+                      )}
+                      <div>
+                        <p className="text-sm font-medium">{company.name}</p>
+                        {company.origin_country && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Globe className="size-3" />
+                            {company.origin_country}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Languages & IDs */}
+          <Card>
+            <CardContent className="pt-6">
+              {(spokenLanguages && spokenLanguages.length > 0) && (
+                <div className="mb-5">
+                  <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider flex items-center gap-2">
+                    <Languages className="size-3" />
+                    Spoken Languages
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {spokenLanguages.map((lang) => (
+                      <Badge key={lang.iso_639_1} variant="outline">
+                        {lang.english_name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider flex items-center gap-2">
+                  <LinkIcon className="size-3" />
+                  External IDs
+                </h3>
+                <div className="flex flex-col gap-1.5 text-sm">
+                  <div className="flex justify-between py-1">
+                    <span className="text-muted-foreground">TMDB ID</span>
+                    <span className="font-mono">{movie.tmdbId}</span>
+                  </div>
+                  {movie.imdbId && (
+                    <div className="flex justify-between py-1">
+                      <span className="text-muted-foreground">IMDB</span>
+                      <a
+                        href={`https://www.imdb.com/title/${movie.imdbId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline font-mono flex items-center gap-1"
+                      >
+                        {movie.imdbId}
+                        <ArrowLeft className="size-3 -rotate-180" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Cached Info */}
+        <div className="text-xs text-muted-foreground pb-12 flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          Cached on {formatDate(movie.createdAt)}
+          {movie.updatedAt && movie.updatedAt !== movie.createdAt && (
+            <> &middot; Updated {formatDate(movie.updatedAt)}</>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

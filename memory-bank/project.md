@@ -1,0 +1,67 @@
+# TMDB Data Caching Service
+
+## Goal
+Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin dashboard, PostgreSQL, and next-auth credentials login.
+
+## Constraints & Preferences
+- Database: PostgreSQL (connection: `192.168.1.220:5432/tmdb_service`)
+- TMDB scope: Movies + TV, detailed data with credits via `append_to_response`
+- Admin UI: Built from scratch with shadcn/ui + Tailwind CSS 4
+- Sync strategy: Manual admin triggers + lazy fetch on missing API requests
+- Auth: next-auth v4 CredentialsProvider (username/password, bcrypt)
+- API access: Required `x-api-key` header, in-memory rate limiting (60 req/min per key)
+- Landing page = `/login`; no public API docs page
+- Deployment: Standalone output, self-hosted (not Vercel)
+
+## Progress
+### Done
+- Project scaffolded at `C:\dev\next\tmdb-service` with Next.js 16
+- `proxy.ts` (renamed from deprecated `middleware.ts`) for admin session check + API key validation
+- Prisma 7 schema (`User`, `ApiKey`, `Movie`, `TvShow`, `SyncLog`) + `prisma.config.ts`
+- Migration `init` applied; seed script creates admin user + default API key
+- Core libs: `lib/prisma.ts`, `lib/tmdb.ts` (API client), `lib/ratelimit.ts` (sliding window)
+- next-auth CredentialsProvider in `app/api/auth/[...nextauth]/route.ts`
+- Login page at `/login` with React Hook Form + Zod
+- API routes: `/api/v1/movies`, `/api/v1/movies/[id]`, `/api/v1/tv`, `/api/v1/tv/[id]`, `/api/v1/search` (lazy sync, pagination, rate limiting)
+- Admin pages: `/admin/movies`, `/admin/tv`, `/admin/keys`, `/admin/sync` with shadcn/ui components
+- Server actions in `app/actions/db.ts` (CRUD, sync operations)
+- Root `/` page redirects based on session cookie (logged in → `/admin/movies`, not logged in → `/login`)
+- TMDB API key verified working
+
+### In Progress
+- (none)
+
+### Blocked
+- (none)
+
+## Key Decisions
+- Next.js 16 for latest App Router + Turbopack support
+- Prisma 7 with `prisma.config.ts` (datasource URL moved out of `schema.prisma`)
+- In-memory rate limiter per API key (Map with timestamp cleanup)
+- Lazy sync pattern: DB check → TMDB fetch → upsert → return
+- proxy.ts handles both admin session check and API key validation
+
+## Next Steps
+1. Test API endpoints with curl/Postman
+2. Test lazy sync flow (request unknown TMDB ID)
+3. Verify admin dashboard sync buttons work end-to-end
+4. Production deployment
+
+## Key Files
+- `proxy.ts`: Middleware for auth session check + API key validation
+- `app/page.tsx`: Root redirect based on session cookie
+- `app/login/page.tsx`: Login form, redirects to `/admin/movies` on success
+- `app/api/auth/[...nextauth]/route.ts`: next-auth handler with PrismaPg adapter
+- `app/api/v1/movies/[id]/route.ts` + `app/api/v1/tv/[id]/route.ts`: Lazy sync logic
+- `app/actions/db.ts`: Server actions for admin CRUD + bulk sync
+- `app/admin/layout.tsx`: Sidebar navigation + `SignOutButton`
+- `lib/tmdb.ts`: TMDB API client with `getMovieDetails`, `getTvDetails`, `getTrending*`, `getTopRated*`
+- `lib/ratelimit.ts`: Sliding window rate limiter (60 req/min)
+- `prisma.config.ts`: Prisma 7 config with `env('DATABASE_URL')` and seed command
+- `prisma/schema.prisma`: Schema models (User, ApiKey, Movie, TvShow, SyncLog)
+
+## Critical Context
+- **Admin credentials**: username `tm81`, password `Tvfhr2012!`
+- **Default API key**: `bc631e0a19353f874f0742c1f00396bdb9d35e0f191104370e69bd4817e024b4`
+- **Dev server**: `http://localhost:3000` (also at `http://192.168.1.217:3000`)
+- **TMDB API key**: Updated, verified working
