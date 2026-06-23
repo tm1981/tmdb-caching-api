@@ -30,4 +30,4 @@
 - `.env`: Contains `DATABASE_URL`, `TMDB_API_KEY`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`.
 - `prisma/schema.prisma`: Defines the database schema (User, ApiKey, Movie, TvShow, SyncLog).
 - `next.config.ts`: Next.js configuration with standalone output.
-- `middleware.ts`: Protects `/admin/*` routes and validates API keys on `/api/v1/*` routes.
+- `proxy.ts`: Protects `/admin/*` routes and validates API keys on `/api/v1/*` routes.

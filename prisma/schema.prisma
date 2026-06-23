@@ -43,7 +43,7 @@ model Movie {
   status              String?
   tagline             String?
   imdbId              String?
-cast                Json?
+  cast                Json?
   crew                Json?
   videos              Json?
   seasons             Json?
@@ -83,4 +83,18 @@ model SyncLog {
   status    String
   detail    String?
   createdAt DateTime @default(now())
+}
+
+model TmdbCache {
+  id        Int      @id @default(autoincrement())
+  cacheKey  String   @unique
+  path      String
+  query     String   @default("")
+  payload   Json
+  status    Int      @default(200)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([path])
+  @@index([updatedAt])
 }

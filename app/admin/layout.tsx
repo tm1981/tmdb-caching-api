@@ -1,11 +1,12 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Film, Tv, Key, RefreshCw, LogOut } from 'lucide-react'
+import { Film, Tv, Key, RefreshCw, User } from 'lucide-react'
 import { SignOutButton } from '@/components/admin/sign-out'
 
 const navItems = [
   { href: '/admin/movies', label: 'Movies', icon: Film },
   { href: '/admin/tv', label: 'TV Shows', icon: Tv },
+  { href: '/admin/people', label: 'People', icon: User },
   { href: '/admin/keys', label: 'API Keys', icon: Key },
   { href: '/admin/sync', label: 'Sync', icon: RefreshCw },
 ]

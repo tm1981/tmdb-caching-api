@@ -20,5 +20,5 @@ const prisma = globalForPrisma.prisma ?? (globalForPrisma.prisma = prismaClientS
 export default prisma
 
 if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = undefined
+  globalForPrisma.prisma = prisma
 }

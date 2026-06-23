@@ -3,12 +3,13 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import prisma from '@/lib/prisma'
-import { getPosterPath, getBackdropPath } from '@/lib/tmdb'
+import { getPosterPath, getBackdropPath, getTvDetails, extractTvDataFull } from '@/lib/tmdb'
+import { getTmdbCacheInfo } from '@/lib/tmdb-cache'
 import { formatRating, formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { Button } from '@/components/ui/button'
+import { RefreshButton } from '@/components/admin/refresh-button'
 import {
   ArrowLeft,
   Star,
@@ -24,14 +25,38 @@ import {
   User,
   LayoutGrid,
   ChevronDown,
-  ChevronRight,
   Clock,
 } from 'lucide-react'
 
 async function getTvShow(tmdbId: number) {
-  return prisma.tvShow.findUnique({
+  const cached = await prisma.tvShow.findUnique({
     where: { tmdbId },
   })
+  if (cached) return cached
+
+  try {
+    const data = await getTvDetails(tmdbId)
+    const tvData = await extractTvDataFull(data, tmdbId)
+
+    const show = await prisma.tvShow.upsert({
+      where: { tmdbId: data.id },
+      create: tvData,
+      update: tvData,
+    })
+
+    await prisma.syncLog.create({
+      data: {
+        type: 'tv',
+        tmdbId: data.id,
+        status: 'success',
+        detail: `Admin lazy-synced TV show: ${data.name}`,
+      },
+    })
+
+    return show
+  } catch {
+    return null
+  }
 }
 
 function RatingBadge({ voteAverage, voteCount }: { voteAverage: number | null; voteCount: number | null }) {
@@ -62,13 +87,13 @@ function RatingBadge({ voteAverage, voteCount }: { voteAverage: number | null; v
 
 function CastCard({ member }: { member: { id: number; name: string; character: string; profilePath: string | null; order: number } }) {
   return (
-    <div className="flex-shrink-0 w-40">
-      <div className="relative overflow-hidden rounded-lg bg-muted aspect-[2/3] mb-2 ring-1 ring-white/5">
+    <Link href={`/admin/people/${member.id}`} className="group flex-shrink-0 w-40">
+      <div className="relative overflow-hidden rounded-lg bg-muted aspect-[2/3] mb-2 ring-1 ring-white/5 group-hover:ring-white/20 transition-all">
         {member.profilePath ? (
           <img
             src={getPosterPath(member.profilePath, 'w500')!}
             alt={member.name}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -77,19 +102,19 @@ function CastCard({ member }: { member: { id: number; name: string; character: s
         )}
         <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/80 to-transparent" />
       </div>
-      <p className="text-sm font-semibold truncate">{member.name}</p>
+      <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{member.name}</p>
       {member.character && (
         <p className="text-xs text-muted-foreground truncate">
           as {member.character}
         </p>
       )}
-    </div>
+    </Link>
   )
 }
 
 function CrewCard({ member }: { member: { id: number; name: string; job: string; department: string; profilePath: string | null } }) {
   return (
-    <div className="flex items-center gap-3 py-2">
+    <Link href={`/admin/people/${member.id}`} className="group flex items-center gap-3 py-2">
       {member.profilePath ? (
         <img
           src={getPosterPath(member.profilePath, 'w500')!}
@@ -102,10 +127,10 @@ function CrewCard({ member }: { member: { id: number; name: string; job: string;
         </div>
       )}
       <div>
-        <p className="text-sm font-medium">{member.name}</p>
+        <p className="text-sm font-medium group-hover:text-primary transition-colors">{member.name}</p>
         <p className="text-xs text-muted-foreground">{member.job}</p>
       </div>
-    </div>
+    </Link>
   )
 }
 
@@ -177,6 +202,11 @@ export default async function TvDetailPage({
   if (!show) {
     notFound()
   }
+
+  const rawCache = await getTmdbCacheInfo(`/tv/${tmdbId}`, {
+    append_to_response: 'credits,videos',
+    language: 'en-US',
+  })
 
   const backdropUrl = getBackdropPath(show.backdropPath, 'w1280')
   const posterUrl = getPosterPath(show.posterPath, 'w780')
@@ -319,8 +349,16 @@ export default async function TvDetailPage({
             )}
 
             {/* Trailer Watch Button */}
-            {trailer && (
-              <div className="mt-6">
+            <div className="mt-6 flex flex-wrap gap-2">
+              <RefreshButton type="tv" id={show.tmdbId} />
+              <Link
+                href={`/admin/tmdb/tv/${show.tmdbId}?append_to_response=credits,videos&language=en-US`}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md border bg-background shadow-xs text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+              >
+                <LinkIcon className="size-4" />
+                View Raw TMDB
+              </Link>
+              {trailer && (
                 <a
                   href={`https://www.youtube.com/watch?v=${trailer.key}`}
                   target="_blank"
@@ -330,8 +368,8 @@ export default async function TvDetailPage({
                   <Play className="size-5 fill-current" />
                   Watch Trailer
                 </a>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
@@ -543,6 +581,7 @@ export default async function TvDetailPage({
           {show.updatedAt && show.updatedAt !== show.createdAt && (
             <> &middot; Updated {formatDate(show.updatedAt)}</>
           )}
+          <> &middot; Raw TMDB cache {rawCache ? `updated ${formatDate(rawCache.updatedAt)}` : 'not cached'}</>
         </div>
       </div>
     </div>

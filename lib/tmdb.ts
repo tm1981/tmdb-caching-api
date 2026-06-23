@@ -22,6 +22,24 @@ async function tmdbRequest<T>(endpoint: string, params: Record<string, string> =
   return res.json()
 }
 
+export async function tmdbRawRequest(endpoint: string, params: URLSearchParams) {
+  const url = new URL(`${TMDB_BASE}${endpoint}`)
+  for (const [key, value] of params.entries()) {
+    url.searchParams.append(key, value)
+  }
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${API_KEY}`,
+      Accept: 'application/json',
+    },
+    next: { revalidate: 0 },
+  })
+  const payload = await res.json().catch(() => ({ status_message: res.statusText }))
+
+  return { ok: res.ok, status: res.status, payload }
+}
+
 export async function searchMovie(query: string, page = 1) {
   return tmdbRequest<{ results: Array<{
     id: number

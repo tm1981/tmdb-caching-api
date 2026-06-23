@@ -16,16 +16,76 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { RefreshCw, Film, Tv } from 'lucide-react'
-import { getSyncLogs } from '@/app/actions/db'
-import { SyncButtons } from '@/components/admin/sync-buttons'
+import { Database, Film, Tv } from 'lucide-react'
+import { getSyncLogs, getTmdbCacheStats } from '@/app/actions/db'
+import { CacheWarmupButtons, SyncButtons } from '@/components/admin/sync-buttons'
 
 export default async function SyncPage() {
-  const logs = await getSyncLogs(50)
+  const [logs, cacheStats] = await Promise.all([
+    getSyncLogs(50),
+    getTmdbCacheStats(),
+  ])
 
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6">Sync</h2>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="size-5" />
+              Mirror Cache
+            </CardTitle>
+            <CardDescription>Total cached TMDB responses</CardDescription>
+          </CardHeader>
+          <CardContent className="text-3xl font-semibold">
+            {cacheStats.total}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Last Cache Write</CardTitle>
+            <CardDescription>Most recent mirrored response</CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm">
+            {cacheStats.lastUpdatedAt
+              ? new Date(cacheStats.lastUpdatedAt).toLocaleString()
+              : 'No cache entries yet'}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Cached Paths</CardTitle>
+            <CardDescription>Recent cache entries by root path</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            {cacheStats.topRoots.length ? (
+              cacheStats.topRoots.map((item) => (
+                <Badge key={item.path} variant="secondary">
+                  {item.path} {item.count}
+                </Badge>
+              ))
+            ) : (
+              <span className="text-sm text-muted-foreground">No cached paths yet</span>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Warm TMDB Mirror Cache</CardTitle>
+          <CardDescription>
+            Preload common public TMDB content endpoints; page count applies to list endpoints
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CacheWarmupButtons />
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <Card>
@@ -35,7 +95,7 @@ export default async function SyncPage() {
               Trending Movies
             </CardTitle>
             <CardDescription>
-              Sync today's trending movies from TMDB
+              Sync trending movies from TMDB today
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -50,7 +110,7 @@ export default async function SyncPage() {
               Trending TV Shows
             </CardTitle>
             <CardDescription>
-              Sync today's trending TV shows from TMDB
+              Sync trending TV shows from TMDB today
             </CardDescription>
           </CardHeader>
           <CardContent>

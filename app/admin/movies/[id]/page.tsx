@@ -3,12 +3,13 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import prisma from '@/lib/prisma'
-import { getPosterPath, getBackdropPath } from '@/lib/tmdb'
+import { getPosterPath, getBackdropPath, getMovieDetails, extractMovieData } from '@/lib/tmdb'
+import { getTmdbCacheInfo } from '@/lib/tmdb-cache'
 import { formatRating, formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { Button } from '@/components/ui/button'
+import { RefreshButton } from '@/components/admin/refresh-button'
 import {
   ArrowLeft,
   Clock,
@@ -27,9 +28,34 @@ import {
 } from 'lucide-react'
 
 async function getMovie(tmdbId: number) {
-  return prisma.movie.findUnique({
+  const cached = await prisma.movie.findUnique({
     where: { tmdbId },
   })
+  if (cached) return cached
+
+  try {
+    const data = await getMovieDetails(tmdbId)
+    const movieData = extractMovieData(data)
+
+    const movie = await prisma.movie.upsert({
+      where: { tmdbId: data.id },
+      create: movieData,
+      update: movieData,
+    })
+
+    await prisma.syncLog.create({
+      data: {
+        type: 'movie',
+        tmdbId: data.id,
+        status: 'success',
+        detail: `Admin lazy-synced movie: ${data.title}`,
+      },
+    })
+
+    return movie
+  } catch {
+    return null
+  }
 }
 
 function RuntimeBadge({ runtime }: { runtime: number | null }) {
@@ -73,7 +99,7 @@ function RatingBadge({ voteAverage, voteCount }: { voteAverage: number | null; v
 function CastCard({ member }: { member: { id: number; name: string; character: string; profilePath: string | null; order: number } }) {
   return (
     <Link
-      href={`/admin/movies?q=${encodeURIComponent(member.name)}`}
+      href={`/admin/people/${member.id}`}
       className="group flex-shrink-0 w-40"
     >
       <div className="relative overflow-hidden rounded-lg bg-muted aspect-[2/3] mb-2 ring-1 ring-white/5 group-hover:ring-white/20 transition-all">
@@ -104,7 +130,7 @@ function CastCard({ member }: { member: { id: number; name: string; character: s
 
 function CrewCard({ member }: { member: { id: number; name: string; job: string; department: string; profilePath: string | null } }) {
   return (
-    <div className="flex items-center gap-3 py-2">
+    <Link href={`/admin/people/${member.id}`} className="group flex items-center gap-3 py-2">
       {member.profilePath ? (
         <img
           src={getPosterPath(member.profilePath, 'w500')!}
@@ -117,10 +143,10 @@ function CrewCard({ member }: { member: { id: number; name: string; job: string;
         </div>
       )}
       <div>
-        <p className="text-sm font-medium">{member.name}</p>
+        <p className="text-sm font-medium group-hover:text-primary transition-colors">{member.name}</p>
         <p className="text-xs text-muted-foreground">{member.job}</p>
       </div>
-    </div>
+    </Link>
   )
 }
 
@@ -141,6 +167,11 @@ export default async function MovieDetailPage({
   if (!movie) {
     notFound()
   }
+
+  const rawCache = await getTmdbCacheInfo(`/movie/${tmdbId}`, {
+    append_to_response: 'credits,videos',
+    language: 'en-US',
+  })
 
   const backdropUrl = getBackdropPath(movie.backdropPath, 'w1280')
   const posterUrl = getPosterPath(movie.posterPath, 'w780')
@@ -273,8 +304,16 @@ export default async function MovieDetailPage({
             )}
 
             {/* Trailer Watch Button */}
-            {trailer && (
-              <div className="mt-6">
+            <div className="mt-6 flex flex-wrap gap-2">
+              <RefreshButton type="movie" id={movie.tmdbId} />
+              <Link
+                href={`/admin/tmdb/movie/${movie.tmdbId}?append_to_response=credits,videos&language=en-US`}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md border bg-background shadow-xs text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+              >
+                <LinkIcon className="size-4" />
+                View Raw TMDB
+              </Link>
+              {trailer && (
                 <a
                   href={`https://www.youtube.com/watch?v=${trailer.key}`}
                   target="_blank"
@@ -284,8 +323,8 @@ export default async function MovieDetailPage({
                   <Play className="size-5 fill-current" />
                   Watch Trailer
                 </a>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
@@ -462,6 +501,7 @@ export default async function MovieDetailPage({
           {movie.updatedAt && movie.updatedAt !== movie.createdAt && (
             <> &middot; Updated {formatDate(movie.updatedAt)}</>
           )}
+          <> &middot; Raw TMDB cache {rawCache ? `updated ${formatDate(rawCache.updatedAt)}` : 'not cached'}</>
         </div>
       </div>
     </div>

@@ -14,8 +14,28 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { getTvShows } from '@/app/actions/db'
 import { getPosterPath } from '@/lib/tmdb'
+import { getCachedTmdb } from '@/lib/tmdb-cache'
 import { formatRating } from '@/lib/utils'
 import { Tv } from 'lucide-react'
+
+type TmdbTvResult = {
+  id: number
+  name: string
+  poster_path: string | null
+  first_air_date: string | null
+  vote_average: number | null
+}
+
+async function searchTmdbTv(query: string) {
+  if (!query) return []
+  const result = await getCachedTmdb<{ results: TmdbTvResult[] }>('/search/tv', {
+    query,
+    page: 1,
+    language: 'en-US',
+    include_adult: 'false',
+  })
+  return result.payload.results || []
+}
 
 export default async function TvPage({
   searchParams,
@@ -27,6 +47,10 @@ export default async function TvPage({
   const page = parseInt(params.page || '1')
 
   const { tvShows, total, totalPages } = await getTvShows(page, 20, search)
+  const localIds = new Set(tvShows.map((show) => show.tmdbId))
+  const tmdbResults = search
+    ? (await searchTmdbTv(search)).filter((show) => !localIds.has(show.id))
+    : []
 
   return (
     <div>
@@ -108,6 +132,33 @@ export default async function TvPage({
               ))}
             </TableBody>
           </Table>
+
+          {search && tmdbResults.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold mb-3">More From TMDB</h3>
+              <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-8 gap-4">
+                {tmdbResults.slice(0, 16).map((show) => (
+                  <Link key={show.id} href={`/admin/tv/${show.id}`} className="group">
+                    <div className="aspect-[2/3] rounded-md bg-muted overflow-hidden mb-2">
+                      {show.poster_path ? (
+                        <img
+                          src={getPosterPath(show.poster_path, 'w500')!}
+                          alt={show.name}
+                          className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center">
+                          <Tv className="size-6 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium line-clamp-2 group-hover:text-primary transition-colors">{show.name}</p>
+                    <p className="text-xs text-muted-foreground">{show.first_air_date?.slice(0, 4) || 'N/A'}</p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
 
           {totalPages > 1 && (
             <div className="flex justify-center gap-2 mt-4">

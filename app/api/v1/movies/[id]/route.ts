@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getMovieDetails, getPosterPath, extractMovieData } from '@/lib/tmdb'
+import { getMovieDetails, extractMovieData } from '@/lib/tmdb'
 import { checkRateLimit } from '@/lib/ratelimit'
 
 export async function GET(

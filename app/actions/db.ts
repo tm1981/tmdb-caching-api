@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import prisma from '@/lib/prisma'
+import { getCachedTmdb } from '@/lib/tmdb-cache'
 import {
   searchMovie,
   searchTv,
@@ -133,6 +134,131 @@ export async function getSyncLogs(limit = 50) {
     take: limit,
     orderBy: { createdAt: 'desc' },
   })
+}
+
+export async function getTmdbCacheStats() {
+  const [total, latest, recent] = await Promise.all([
+    prisma.tmdbCache.count(),
+    prisma.tmdbCache.findFirst({
+      orderBy: { updatedAt: 'desc' },
+      select: { updatedAt: true },
+    }),
+    // ponytail: sample recent rows; use SQL grouping if the cache grows large.
+    prisma.tmdbCache.findMany({
+      take: 1000,
+      orderBy: { updatedAt: 'desc' },
+      select: { path: true },
+    }),
+  ])
+
+  const roots = new Map<string, number>()
+  for (const item of recent) {
+    const root = item.path.split('/').filter(Boolean)[0] || '/'
+    roots.set(root, (roots.get(root) || 0) + 1)
+  }
+
+  return {
+    total,
+    lastUpdatedAt: latest?.updatedAt ?? null,
+    topRoots: [...roots.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([path, count]) => ({ path: `/${path}`, count })),
+  }
+}
+
+const tmdbWarmups = {
+  core: [
+    ['/configuration', {}, false],
+    ['/genre/movie/list', { language: 'en-US' }, false],
+    ['/genre/tv/list', { language: 'en-US' }, false],
+    ['/watch/providers/regions', { language: 'en-US' }, false],
+    ['/watch/providers/movie', { language: 'en-US' }, false],
+    ['/watch/providers/tv', { language: 'en-US' }, false],
+  ],
+  trending: [
+    ['/trending/all/day', { language: 'en-US' }, true],
+    ['/trending/movie/day', { language: 'en-US' }, true],
+    ['/trending/tv/day', { language: 'en-US' }, true],
+    ['/trending/person/day', { language: 'en-US' }, true],
+  ],
+  popular: [
+    ['/movie/popular', { language: 'en-US' }, true],
+    ['/tv/popular', { language: 'en-US' }, true],
+    ['/movie/top_rated', { language: 'en-US' }, true],
+    ['/tv/top_rated', { language: 'en-US' }, true],
+  ],
+} satisfies Record<string, Array<[string, Record<string, string>, boolean]>>
+
+export type TmdbWarmupType = keyof typeof tmdbWarmups
+
+export async function warmupTmdbCache(type: TmdbWarmupType, pages = 1) {
+  const endpoints = tmdbWarmups[type]
+  const pageCount = Math.min(Math.max(Math.trunc(pages) || 1, 1), 20)
+  let success = 0
+  let errors = 0
+
+  for (const [endpoint, baseParams, paginated] of endpoints) {
+    for (let page = 1; page <= (paginated ? pageCount : 1); page++) {
+      const params = paginated ? { ...baseParams, page: String(page) } : baseParams
+      const result = await getCachedTmdb(endpoint, params, true)
+
+      if (result.cache === 'bypass') {
+        errors++
+        continue
+      }
+      success++
+    }
+  }
+
+  await prisma.syncLog.create({
+    data: {
+      type: 'tmdb-cache',
+      status: errors ? 'partial' : 'success',
+      detail: `Warmed ${success} ${type} TMDB cache endpoints (${errors} errors, ${pageCount} page limit)`,
+    },
+  })
+
+  revalidatePath('/admin/sync')
+  return { success, errors }
+}
+
+export async function refreshMovieFromTmdb(tmdbId: number) {
+  const data = await getMovieDetails(tmdbId)
+  const movieData = extractMovieData(data)
+  await prisma.movie.upsert({
+    where: { tmdbId: data.id },
+    create: movieData,
+    update: movieData,
+  })
+  await getCachedTmdb(`/movie/${tmdbId}`, { append_to_response: 'credits,videos', language: 'en-US' }, true)
+  revalidatePath(`/admin/movies/${tmdbId}`)
+  revalidatePath('/admin/movies')
+  return { success: 1, errors: 0 }
+}
+
+export async function refreshTvFromTmdb(tmdbId: number) {
+  const data = await getTvDetails(tmdbId)
+  const tvData = await extractTvDataFull(data, tmdbId)
+  await prisma.tvShow.upsert({
+    where: { tmdbId: data.id },
+    create: tvData,
+    update: tvData,
+  })
+  await getCachedTmdb(`/tv/${tmdbId}`, { append_to_response: 'credits,videos', language: 'en-US' }, true)
+  revalidatePath(`/admin/tv/${tmdbId}`)
+  revalidatePath('/admin/tv')
+  return { success: 1, errors: 0 }
+}
+
+export async function refreshPersonFromTmdb(personId: number) {
+  await getCachedTmdb(
+    `/person/${personId}`,
+    { append_to_response: 'combined_credits,images,external_ids', language: 'en-US' },
+    true,
+  )
+  revalidatePath(`/admin/people/${personId}`)
+  return { success: 1, errors: 0 }
 }
 
 // Sync Operations

@@ -9,7 +9,7 @@ A decoupled caching system consisting of:
 2. **Admin Dashboard**: A password-protected interface for browsing cached data, managing API keys, and triggering manual syncs.
 
 ## User Experience
-- **Landing Page**: Redirects to `/login`.
+- **Landing Page**: Redirects logged-in admins to `/admin/movies`; otherwise redirects to `/login`.
 - **Login Page**: Simple username/password form with next-auth Credentials Provider.
 - **Admin Dashboard**:
   - **Movies**: Searchable table of cached movies with posters, ratings, and TMDB IDs.

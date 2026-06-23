@@ -41,8 +41,8 @@ ADMIN_PASSWORD=your_secure_password
 ### 3. Set up the database
 
 ```bash
-# Apply migrations
-npx prisma migrate dev --name init
+# Apply existing migrations
+npx prisma migrate dev
 
 # Seed with admin user and default API key
 npx prisma db seed
@@ -64,14 +64,16 @@ Go to `http://localhost:3000/login` and use the admin credentials you set in `.e
 
 After login, the admin dashboard provides:
 
-- **Movies** — Browse, search, and manage cached movies
-- **TV Shows** — Browse, search, and manage cached TV shows
-- **Sync** — Trigger bulk syncs (trending movies/TV, top rated)
-- **API Keys** — Create, manage, and revoke API keys
+- **Movies** - Browse, search, and manage cached movies
+- **TV Shows** - Browse, search, and manage cached TV shows
+- **Sync** - Trigger bulk syncs (trending movies/TV, top rated)
+- **API Keys** - Create, manage, and revoke API keys
 
 ## API Endpoints
 
 All API endpoints require the `x-api-key` header. Rate limit: 60 requests per minute per key.
+
+For TMDB-compatible content mirroring, use `/api/v1/tmdb/{tmdb_path}`. It forwards public TMDB content GET endpoints, caches successful JSON responses, and keeps TMDB's response shape. See [docs/api.md](docs/api.md).
 
 ### Movies
 
@@ -140,19 +142,16 @@ curl -H "x-api-key: your_api_key" "http://localhost:3000/api/v1/movies?page=2&li
 }
 ```
 
-### Detail endpoints return:
+### Detail endpoints return TMDB-compatible JSON:
 ```json
 {
-  "data": {
-    "id": 1,
-    "tmdbId": 278,
-    "title": "The Shawshank Redemption",
-    "overview": "...",
-    "posterPath": "/...",
-    "posterUrl": "https://image.tmdb.org/t/p/w500/...",
-    "backdropUrl": "https://image.tmdb.org/t/p/w780/...",
-    ...
-  }
+  "id": 278,
+  "title": "The Shawshank Redemption",
+  "overview": "...",
+  "poster_path": "/...",
+  "backdrop_path": "/...",
+  "credits": { "cast": [], "crew": [] },
+  "videos": { "results": [] }
 }
 ```
 

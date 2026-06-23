@@ -14,11 +14,35 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { getMovies } from '@/app/actions/db'
 import { getPosterPath } from '@/lib/tmdb'
+import { getCachedTmdb } from '@/lib/tmdb-cache'
 import { formatRating } from '@/lib/utils'
 import { Film } from 'lucide-react'
 
+type TmdbMovieResult = {
+  id: number
+  title: string
+  poster_path: string | null
+  release_date: string | null
+  vote_average: number | null
+}
+
+async function searchTmdbMovies(query: string) {
+  if (!query) return []
+  const result = await getCachedTmdb<{ results: TmdbMovieResult[] }>('/search/movie', {
+    query,
+    page: 1,
+    language: 'en-US',
+    include_adult: 'false',
+  })
+  return result.payload.results || []
+}
+
 async function MovieTableContent({ search, page }: { search: string; page: number }) {
   const { movies, total, totalPages } = await getMovies(page, 20, search)
+  const localIds = new Set(movies.map((movie) => movie.tmdbId))
+  const tmdbResults = search
+    ? (await searchTmdbMovies(search)).filter((movie) => !localIds.has(movie.id))
+    : []
 
   return (
     <>
@@ -84,6 +108,33 @@ async function MovieTableContent({ search, page }: { search: string; page: numbe
           ))}
         </TableBody>
       </Table>
+
+      {search && tmdbResults.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold mb-3">More From TMDB</h3>
+          <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-8 gap-4">
+            {tmdbResults.slice(0, 16).map((movie) => (
+              <Link key={movie.id} href={`/admin/movies/${movie.id}`} className="group">
+                <div className="aspect-[2/3] rounded-md bg-muted overflow-hidden mb-2">
+                  {movie.poster_path ? (
+                    <img
+                      src={getPosterPath(movie.poster_path, 'w500')!}
+                      alt={movie.title}
+                      className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <Film className="size-6 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                <p className="text-sm font-medium line-clamp-2 group-hover:text-primary transition-colors">{movie.title}</p>
+                <p className="text-xs text-muted-foreground">{movie.release_date?.slice(0, 4) || 'N/A'}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {totalPages > 1 && (
         <div className="flex justify-center gap-2 mt-4">
