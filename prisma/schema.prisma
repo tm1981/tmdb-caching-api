@@ -17,7 +17,8 @@ model User {
 
 model ApiKey {
   id        Int      @id @default(autoincrement())
-  key       String   @unique
+  keyHash   String?  @unique
+  keyPrefix String   @default("")
   label     String
   active    Boolean  @default(true)
   owner     User     @relation(fields: [ownerId], references: [id])

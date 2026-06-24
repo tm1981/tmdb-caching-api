@@ -39,7 +39,7 @@ export default async function KeysPage() {
               <TableCell>
                 <div className="flex items-center gap-2">
                   <code className="text-sm font-mono bg-muted px-2 py-1 rounded truncate max-w-[200px]">
-                    {key.key.slice(0, 12)}...
+                    {key.keyPrefix ? `${key.keyPrefix}...` : 'legacy key'}
                   </code>
                 </div>
               </TableCell>
@@ -55,7 +55,6 @@ export default async function KeysPage() {
               <TableCell>
                 <KeyActions
                   keyId={key.id}
-                  key={key.key}
                   active={key.active}
                 />
               </TableCell>

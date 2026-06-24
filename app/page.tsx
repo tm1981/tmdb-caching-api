@@ -1,11 +1,11 @@
-import { cookies } from 'next/headers'
+import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
+import { authOptions } from '@/lib/auth'
 
 export default async function HomePage() {
-  const cookieStore = await cookies()
-  const sessionToken = cookieStore.get('next-auth.session-token')
+  const session = await getServerSession(authOptions)
 
-  if (sessionToken) {
+  if ((session?.user as { role?: string } | undefined)?.role === 'admin') {
     redirect('/admin/movies')
   }
 

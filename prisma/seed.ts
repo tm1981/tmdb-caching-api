@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { hash } from 'bcryptjs'
 import { randomBytes } from 'crypto'
+import { hashApiKey } from '../lib/api-keys'
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({
@@ -33,10 +34,12 @@ async function main() {
   })
 
   const apiKey = randomBytes(32).toString('hex')
+  const keyHash = await hashApiKey(apiKey)
 
   await prisma.apiKey.create({
     data: {
-      key: apiKey,
+      keyHash,
+      keyPrefix: apiKey.slice(0, 12),
       label: 'Default',
       active: true,
       ownerId: user.id,

@@ -1,6 +1,8 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { requireAdmin } from '@/lib/auth'
+import { hashApiKey } from '@/lib/api-keys'
 import prisma from '@/lib/prisma'
 import { getCachedTmdb } from '@/lib/tmdb-cache'
 import {
@@ -18,6 +20,7 @@ import {
 
 // Movies
 export async function getMovies(page = 1, limit = 20, query = '') {
+  await requireAdmin()
   const skip = (page - 1) * limit
 
   const where: any = {}
@@ -42,12 +45,14 @@ export async function getMovies(page = 1, limit = 20, query = '') {
 }
 
 export async function getMovieById(id: number) {
+  await requireAdmin()
   return prisma.movie.findUnique({
     where: { tmdbId: id },
   })
 }
 
 export async function deleteMovie(tmdbId: number) {
+  await requireAdmin()
   await prisma.movie.delete({
     where: { tmdbId },
   })
@@ -56,6 +61,7 @@ export async function deleteMovie(tmdbId: number) {
 
 // TV Shows
 export async function getTvShows(page = 1, limit = 20, query = '') {
+  await requireAdmin()
   const skip = (page - 1) * limit
 
   const where: any = {}
@@ -80,12 +86,14 @@ export async function getTvShows(page = 1, limit = 20, query = '') {
 }
 
 export async function getTvShowById(id: number) {
+  await requireAdmin()
   return prisma.tvShow.findUnique({
     where: { tmdbId: id },
   })
 }
 
 export async function deleteTvShow(tmdbId: number) {
+  await requireAdmin()
   await prisma.tvShow.delete({
     where: { tmdbId },
   })
@@ -94,6 +102,7 @@ export async function deleteTvShow(tmdbId: number) {
 
 // API Keys
 export async function getApiKeys() {
+  await requireAdmin()
   return prisma.apiKey.findMany({
     include: { owner: { select: { username: true } } },
     orderBy: { createdAt: 'desc' },
@@ -101,20 +110,26 @@ export async function getApiKeys() {
 }
 
 export async function createApiKey(label: string) {
+  await requireAdmin()
   const crypto = await import('crypto')
   const key = crypto.randomBytes(32).toString('hex')
+  const keyHash = await hashApiKey(key)
 
-  return prisma.apiKey.create({
+  const apiKey = await prisma.apiKey.create({
     data: {
-      key,
+      keyHash,
+      keyPrefix: key.slice(0, 12),
       label,
       active: true,
       ownerId: 1,
     },
   })
+
+  return { ...apiKey, key }
 }
 
 export async function toggleApiKey(id: number) {
+  await requireAdmin()
   const existing = await prisma.apiKey.findUnique({ where: { id } })
   await prisma.apiKey.update({
     where: { id },
@@ -124,12 +139,14 @@ export async function toggleApiKey(id: number) {
 }
 
 export async function deleteApiKey(id: number) {
+  await requireAdmin()
   await prisma.apiKey.delete({ where: { id } })
   revalidatePath('/admin/keys')
 }
 
 // Sync Logs
 export async function getSyncLogs(limit = 50) {
+  await requireAdmin()
   return prisma.syncLog.findMany({
     take: limit,
     orderBy: { createdAt: 'desc' },
@@ -137,6 +154,7 @@ export async function getSyncLogs(limit = 50) {
 }
 
 export async function getTmdbCacheStats() {
+  await requireAdmin()
   const [total, latest, recent] = await Promise.all([
     prisma.tmdbCache.count(),
     prisma.tmdbCache.findFirst({
@@ -193,6 +211,7 @@ const tmdbWarmups = {
 export type TmdbWarmupType = keyof typeof tmdbWarmups
 
 export async function warmupTmdbCache(type: TmdbWarmupType, pages = 1) {
+  await requireAdmin()
   const endpoints = tmdbWarmups[type]
   const pageCount = Math.min(Math.max(Math.trunc(pages) || 1, 1), 20)
   let success = 0
@@ -224,6 +243,7 @@ export async function warmupTmdbCache(type: TmdbWarmupType, pages = 1) {
 }
 
 export async function refreshMovieFromTmdb(tmdbId: number) {
+  await requireAdmin()
   const data = await getMovieDetails(tmdbId)
   const movieData = extractMovieData(data)
   await prisma.movie.upsert({
@@ -238,6 +258,7 @@ export async function refreshMovieFromTmdb(tmdbId: number) {
 }
 
 export async function refreshTvFromTmdb(tmdbId: number) {
+  await requireAdmin()
   const data = await getTvDetails(tmdbId)
   const tvData = await extractTvDataFull(data, tmdbId)
   await prisma.tvShow.upsert({
@@ -252,6 +273,7 @@ export async function refreshTvFromTmdb(tmdbId: number) {
 }
 
 export async function refreshPersonFromTmdb(personId: number) {
+  await requireAdmin()
   await getCachedTmdb(
     `/person/${personId}`,
     { append_to_response: 'combined_credits,images,external_ids', language: 'en-US' },
@@ -263,6 +285,7 @@ export async function refreshPersonFromTmdb(personId: number) {
 
 // Sync Operations
 export async function syncTrendingMovies() {
+  await requireAdmin()
   const { results } = await getTrendingMovies('day')
   let success = 0
   let errors = 0
@@ -296,6 +319,7 @@ export async function syncTrendingMovies() {
 }
 
 export async function syncTrendingTv() {
+  await requireAdmin()
   const { results } = await getTrendingTv('day')
   let success = 0
   let errors = 0
@@ -329,6 +353,7 @@ export async function syncTrendingTv() {
 }
 
 export async function syncTopRatedMovies() {
+  await requireAdmin()
   const { results } = await getTopRatedMovies(1)
   let success = 0
   let errors = 0
@@ -362,6 +387,7 @@ export async function syncTopRatedMovies() {
 }
 
 export async function syncTopRatedTv() {
+  await requireAdmin()
   const { results } = await getTopRatedTv(1)
   let success = 0
   let errors = 0
