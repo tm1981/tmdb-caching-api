@@ -1,8 +1,9 @@
 import 'dotenv/config'
 import { defineConfig, env } from 'prisma/config'
+import { getPrismaSchema } from './lib/database-provider'
 
 export default defineConfig({
-  schema: './prisma/schema.prisma',
+  schema: getPrismaSchema(),
   migrations: {
     seed: 'npx tsx prisma/seed.ts',
   },

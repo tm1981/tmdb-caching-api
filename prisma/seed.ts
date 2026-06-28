@@ -1,13 +1,11 @@
 import { PrismaClient } from '@prisma/client'
-import { PrismaPg } from '@prisma/adapter-pg'
 import { hash } from 'bcryptjs'
 import { randomBytes } from 'crypto'
 import { hashApiKey } from '../lib/api-keys'
+import { createPrismaAdapter } from '../lib/database-provider'
 
 const prisma = new PrismaClient({
-  adapter: new PrismaPg({
-    connectionString: process.env.DATABASE_URL,
-  }),
+  adapter: createPrismaAdapter(),
 })
 
 async function main() {

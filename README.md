@@ -1,11 +1,11 @@
 # TMDB Data Caching Service
 
-A Next.js 16 service that caches TMDB movie and TV show data in PostgreSQL, providing a fast local API with lazy sync and admin dashboard.
+A Next.js 16 service that caches TMDB movie and TV show data in PostgreSQL, MySQL, or MariaDB, providing a fast local API with lazy sync and admin dashboard.
 
 ## Tech Stack
 
 - **Next.js 16** with App Router
-- **PostgreSQL** for data storage
+- **PostgreSQL**, **MySQL**, or **MariaDB** for data storage
 - **Prisma 7** as ORM
 - **next-auth v4** for admin authentication
 - **shadcn/ui** + Tailwind CSS 4 for admin UI
@@ -13,23 +13,41 @@ A Next.js 16 service that caches TMDB movie and TV show data in PostgreSQL, prov
 ## Prerequisites
 
 - Node.js 20+
-- PostgreSQL 14+
+- PostgreSQL 14+, MySQL 8+, or MariaDB 10.6+
 - TMDB API key from [themoviedb.org](https://www.themoviedb.org/settings/api)
 
 ## Setup
 
-### 1. Clone and install dependencies
+### 1. Choose and create the database
+
+Choose the database type before setup. The selected type is fixed for that installation; changing it later means setting up a new database or migrating data yourself.
+
+Create an empty database named `tmdb_service` in one of:
+
+```bash
+# PostgreSQL
+createdb tmdb_service
+
+# MySQL
+mysql -u root -p -e "CREATE DATABASE tmdb_service CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+# MariaDB
+mariadb -u root -p -e "CREATE DATABASE tmdb_service CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
+
+### 2. Clone and install dependencies
 
 ```bash
 cd tmdb-service
 npm install
 ```
 
-### 2. Configure environment variables
+### 3. Configure environment variables
 
 Copy `.env.example` to `.env` and fill in your values:
 
 ```env
+DATABASE_PROVIDER=postgresql
 DATABASE_URL=postgresql://user:password@host:5432/tmdb_service
 TMDB_API_KEY=your_tmdb_api_key_here
 NEXTAUTH_SECRET=your_random_secret_here
@@ -38,17 +56,36 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your_secure_password
 ```
 
-### 3. Set up the database
+Database URL examples:
 
-```bash
-# Apply existing migrations
-npx prisma migrate dev
+```env
+# PostgreSQL
+DATABASE_PROVIDER=postgresql
+DATABASE_URL=postgresql://user:password@host:5432/tmdb_service
 
-# Seed with admin user and default API key
-npx prisma db seed
+# MySQL
+DATABASE_PROVIDER=mysql
+DATABASE_URL=mysql://user:password@host:3306/tmdb_service
+
+# MariaDB
+DATABASE_PROVIDER=mariadb
+DATABASE_URL=mysql://user:password@host:3306/tmdb_service
 ```
 
-### 4. Run the development server
+### 4. Set up the database
+
+```bash
+# Generate Prisma Client for your selected database
+npm run db:generate
+
+# Create/update tables
+npm run db:push
+
+# Seed with admin user and default API key
+npm run db:seed
+```
+
+### 5. Run the development server
 
 ```bash
 npm run dev
@@ -56,7 +93,7 @@ npm run dev
 
 The app will be available at `http://localhost:3000`.
 
-### 5. Login to admin dashboard
+### 6. Login to admin dashboard
 
 Go to `http://localhost:3000/login` and use the admin credentials you set in `.env`.
 
@@ -168,6 +205,7 @@ curl -H "x-api-key: your_api_key" "http://localhost:3000/api/v1/movies?page=2&li
 ## Production Build
 
 ```bash
+npm run db:generate
 npm run build
 npm start
 ```
