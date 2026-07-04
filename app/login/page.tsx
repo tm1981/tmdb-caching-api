@@ -13,8 +13,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from 'sonner'
 
 const loginSchema = z.object({
-  username: z.string().min(1, 'Username is required'),
+  username: z.email('Enter an email address'),
   password: z.string().min(1, 'Password is required'),
+  twoFactorCode: z.string().optional(),
 })
 
 type LoginForm = z.infer<typeof loginSchema>
@@ -22,6 +23,7 @@ type LoginForm = z.infer<typeof loginSchema>
 export default function LoginPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [needsCode, setNeedsCode] = useState(false)
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -36,8 +38,19 @@ export default function LoginPage() {
 
     setIsLoading(false)
 
+    if (result?.error === 'TwoFactorRequired') {
+      setNeedsCode(true)
+      toast.success('Check your email or server console for the login code')
+      return
+    }
+
+    if (result?.error === 'EmailUsernameRequired') {
+      toast.error('Use an email address as your username for 2FA')
+      return
+    }
+
     if (result?.error) {
-      toast.error('Invalid username or password')
+      toast.error(needsCode ? 'Invalid two-factor code' : 'Invalid username or password')
       return
     }
 
@@ -61,8 +74,10 @@ export default function LoginPage() {
                   <Label htmlFor="username">Username</Label>
                   <Input
                     id="username"
-                    type="text"
-                    placeholder="Enter username"
+                    type="email"
+                    placeholder="Enter email"
+                    autoComplete="username"
+                    readOnly={needsCode}
                     {...register('username')}
                   />
                   {errors.username && (
@@ -75,14 +90,29 @@ export default function LoginPage() {
                     id="password"
                     type="password"
                     placeholder="Enter password"
+                    autoComplete="current-password"
+                    readOnly={needsCode}
                     {...register('password')}
                   />
                   {errors.password && (
                     <p className="text-sm text-destructive">{errors.password.message}</p>
                   )}
                 </div>
+                {needsCode && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="twoFactorCode">Two-factor code</Label>
+                    <Input
+                      id="twoFactorCode"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="Enter 6-digit code"
+                      {...register('twoFactorCode')}
+                    />
+                  </div>
+                )}
                 <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? 'Signing in...' : 'Sign In'}
+                  {isLoading ? 'Signing in...' : needsCode ? 'Verify Code' : 'Sign In'}
                 </Button>
               </div>
             </form>

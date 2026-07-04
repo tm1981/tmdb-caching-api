@@ -9,7 +9,7 @@ const prisma = new PrismaClient({
 })
 
 async function main() {
-  const username = process.env.ADMIN_USERNAME || 'admin'
+  const username = process.env.ADMIN_USERNAME || 'admin@example.com'
   const password = process.env.ADMIN_PASSWORD || 'admin123'
 
   const existing = await prisma.user.findUnique({
@@ -17,7 +17,33 @@ async function main() {
   })
 
   if (existing) {
-    console.log('Admin user already exists.')
+    if (process.env.ADMIN_PASSWORD) {
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: { password: await hash(process.env.ADMIN_PASSWORD, 12) },
+      })
+      console.log('Admin password updated.')
+    } else {
+      console.log('Admin user already exists.')
+    }
+    return
+  }
+
+  const firstAdmin = await prisma.user.findFirst({
+    where: { role: 'admin' },
+  })
+
+  if (firstAdmin) {
+    await prisma.user.update({
+      where: { id: firstAdmin.id },
+      data: {
+        username,
+        ...(process.env.ADMIN_PASSWORD
+          ? { password: await hash(process.env.ADMIN_PASSWORD, 12) }
+          : {}),
+      },
+    })
+    console.log(`Admin user updated: ${username}`)
     return
   }
 

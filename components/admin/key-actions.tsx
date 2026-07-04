@@ -16,8 +16,8 @@ interface KeyActionsProps {
 export function KeyActions({
   keyId,
   active,
-  showToggle,
-  showDelete,
+  showToggle = true,
+  showDelete = true,
 }: KeyActionsProps) {
   const [isDeleting, setIsDeleting] = useState(false)
 

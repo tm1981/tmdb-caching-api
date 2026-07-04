@@ -18,11 +18,11 @@ export default async function AdminLayout({
 }>) {
   return (
     <div className="flex min-h-screen bg-muted/40">
-      <aside className="w-64 min-w-64 flex-shrink-0 bg-background border-r flex flex-col">
+      <aside className="sticky top-0 h-screen w-64 min-w-64 flex-shrink-0 bg-background border-r flex flex-col">
         <div className="p-4 border-b">
           <h1 className="text-lg font-bold">TMDB Admin</h1>
         </div>
-        <nav className="p-2 flex-1">
+        <nav className="p-2 flex-1 overflow-y-auto">
           {navItems.map((item) => (
             <Link
               key={item.href}

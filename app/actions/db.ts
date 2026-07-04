@@ -110,7 +110,15 @@ export async function getApiKeys() {
 }
 
 export async function createApiKey(label: string) {
-  await requireAdmin()
+  const session = await requireAdmin()
+  const sessionUser = session?.user as { id?: string; email?: string | null; name?: string | null } | undefined
+  const userId = Number(sessionUser?.id) || (
+    await prisma.user.findUnique({
+      where: { username: sessionUser?.email || sessionUser?.name || '' },
+      select: { id: true },
+    })
+  )?.id
+  if (!userId) throw new Error('Unauthorized')
   const crypto = await import('crypto')
   const key = crypto.randomBytes(32).toString('hex')
   const keyHash = await hashApiKey(key)
@@ -121,7 +129,7 @@ export async function createApiKey(label: string) {
       keyPrefix: key.slice(0, 12),
       label,
       active: true,
-      ownerId: 1,
+      ownerId: userId,
     },
   })
 

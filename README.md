@@ -52,8 +52,13 @@ DATABASE_URL=postgresql://user:password@host:5432/tmdb_service
 TMDB_API_KEY=your_tmdb_api_key_here
 NEXTAUTH_SECRET=your_random_secret_here
 NEXTAUTH_URL=http://localhost:3000
-ADMIN_USERNAME=admin
+ADMIN_USERNAME=admin@example.com
 ADMIN_PASSWORD=your_secure_password
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your_smtp_username
+SMTP_PASSWORD=your_smtp_password
+SMTP_FROM="TMDB Service <no-reply@example.com>"
 ```
 
 Database URL examples:
