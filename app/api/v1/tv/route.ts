@@ -25,8 +25,8 @@ export async function GET(req: NextRequest) {
   const where: any = {}
   if (query) {
     where.OR = [
-      { name: { contains: query, mode: 'insensitive' } },
-      { originalName: { contains: query, mode: 'insensitive' } },
+      { name: { contains: query } },
+      { originalName: { contains: query } },
     ]
   }
 

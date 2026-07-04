@@ -26,8 +26,8 @@ export async function getMovies(page = 1, limit = 20, query = '') {
   const where: any = {}
   if (query) {
     where.OR = [
-      { title: { contains: query, mode: 'insensitive' } },
-      { originalTitle: { contains: query, mode: 'insensitive' } },
+      { title: { contains: query } },
+      { originalTitle: { contains: query } },
     ]
   }
 
@@ -67,8 +67,8 @@ export async function getTvShows(page = 1, limit = 20, query = '') {
   const where: any = {}
   if (query) {
     where.OR = [
-      { name: { contains: query, mode: 'insensitive' } },
-      { originalName: { contains: query, mode: 'insensitive' } },
+      { name: { contains: query } },
+      { originalName: { contains: query } },
     ]
   }
 

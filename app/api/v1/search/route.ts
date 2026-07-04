@@ -57,8 +57,8 @@ export async function GET(req: NextRequest) {
     prisma.movie.findMany({
       where: {
         OR: [
-          { title: { contains: query, mode: 'insensitive' } },
-          { originalTitle: { contains: query, mode: 'insensitive' } },
+          { title: { contains: query } },
+          { originalTitle: { contains: query } },
         ],
       },
       take: 20,
@@ -77,8 +77,8 @@ export async function GET(req: NextRequest) {
     prisma.tvShow.findMany({
       where: {
         OR: [
-          { name: { contains: query, mode: 'insensitive' } },
-          { originalName: { contains: query, mode: 'insensitive' } },
+          { name: { contains: query } },
+          { originalName: { contains: query } },
         ],
       },
       take: 20,
