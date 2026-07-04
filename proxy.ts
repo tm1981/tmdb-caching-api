@@ -1,14 +1,11 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
-import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 import { hashApiKey } from '@/lib/api-keys'
+import { createPrismaAdapter } from '@/lib/database-provider'
 
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL,
-})
-const prisma = new PrismaClient({ adapter })
+const prisma = new PrismaClient({ adapter: createPrismaAdapter() })
 
 export async function proxy(request: NextRequest) {
   const { nextUrl } = request

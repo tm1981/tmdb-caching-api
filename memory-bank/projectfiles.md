@@ -41,13 +41,14 @@ This is a list of the core application files, excluding configuration files and 
 - `components/admin/sign-out.tsx`: Client component for next-auth sign out.
 
 ## Lib & Utilities
-- `lib/prisma.ts`: Singleton PrismaClient instance with PrismaPg adapter.
+- `lib/prisma.ts`: Singleton PrismaClient instance with provider-aware adapter.
 - `lib/tmdb.ts`: TMDB API client with functions for search, details, trending, top-rated.
 - `lib/ratelimit.ts`: In-memory rate limiter with sliding window cleanup.
 - `lib/utils.ts`: Utility functions (cn, formatDate, formatRating).
 
 ## Database
 - `prisma/schema.prisma`: Schema definition for PostgreSQL database (User, ApiKey, Movie, TvShow, SyncLog, TmdbCache).
+- `prisma/schema.mysql.prisma`: Schema definition for MySQL/MariaDB database with the same models.
 - `prisma/seed.ts`: Seed script to create admin user and default API key.
 
 ## Proxy

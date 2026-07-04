@@ -1,10 +1,10 @@
 # TMDB Data Caching Service
 
 ## Goal
-Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin dashboard, PostgreSQL, and next-auth credentials login.
+Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin dashboard, PostgreSQL/MySQL/MariaDB support, and next-auth credentials login.
 
 ## Constraints & Preferences
-- Database: PostgreSQL (connection: `192.168.1.220:5432/tmdb_service`)
+- Database: PostgreSQL, MySQL, or MariaDB selected by `DATABASE_PROVIDER` and `DATABASE_URL`
 - TMDB scope: Movies + TV, detailed data with credits via `append_to_response`
 - Admin UI: Built from scratch with shadcn/ui + Tailwind CSS 4
 - Sync strategy: Manual admin triggers + lazy fetch on missing API requests
@@ -27,6 +27,7 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - Server actions in `app/actions/db.ts` (CRUD, sync operations)
 - Root `/` page redirects based on session cookie (logged in → `/admin/movies`, not logged in → `/login`)
 - TMDB API key verified working
+- MySQL startup fixed by using the shared provider-aware Prisma adapter in `proxy.ts`
 
 ### In Progress
 - (none)
@@ -51,14 +52,14 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - `proxy.ts`: Middleware for auth session check + API key validation
 - `app/page.tsx`: Root redirect based on session cookie
 - `app/login/page.tsx`: Login form, redirects to `/admin/movies` on success
-- `app/api/auth/[...nextauth]/route.ts`: next-auth handler with PrismaPg adapter
+- `app/api/auth/[...nextauth]/route.ts`: next-auth handler using shared Prisma client
 - `app/api/v1/movies/[id]/route.ts` + `app/api/v1/tv/[id]/route.ts`: Lazy sync logic
 - `app/actions/db.ts`: Server actions for admin CRUD + bulk sync
 - `app/admin/layout.tsx`: Sidebar navigation + `SignOutButton`
 - `lib/tmdb.ts`: TMDB API client with `getMovieDetails`, `getTvDetails`, `getTrending*`, `getTopRated*`
 - `lib/ratelimit.ts`: Sliding window rate limiter (60 req/min)
 - `prisma.config.ts`: Prisma 7 config with `env('DATABASE_URL')` and seed command
-- `prisma/schema.prisma`: Schema models (User, ApiKey, Movie, TvShow, SyncLog)
+- `prisma/schema.prisma` / `prisma/schema.mysql.prisma`: Provider-specific schema files with shared models
 
 ## Critical Context
 - **Admin credentials**: Stored in local `.env`; do not commit real credentials.

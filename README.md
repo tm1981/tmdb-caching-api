@@ -47,8 +47,8 @@ npm install
 Copy `.env.example` to `.env` and fill in your values:
 
 ```env
-DATABASE_PROVIDER=postgresql
-DATABASE_URL=postgresql://user:password@host:5432/tmdb_service
+DATABASE_PROVIDER=mysql
+DATABASE_URL=mysql://user:password@host:3306/tmdb_service
 TMDB_API_KEY=your_tmdb_api_key_here
 NEXTAUTH_SECRET=your_random_secret_here
 NEXTAUTH_URL=http://localhost:3000
@@ -76,6 +76,8 @@ DATABASE_URL=mysql://user:password@host:3306/tmdb_service
 DATABASE_PROVIDER=mariadb
 DATABASE_URL=mysql://user:password@host:3306/tmdb_service
 ```
+
+`DATABASE_PROVIDER` must match `DATABASE_URL` before running Prisma commands or building the app. For MySQL, use `DATABASE_PROVIDER=mysql` and a `mysql://...` URL.
 
 ### 4. Set up the database
 
@@ -212,10 +214,10 @@ curl -H "x-api-key: your_api_key" "http://localhost:3000/api/v1/movies?page=2&li
 ```bash
 npm run db:generate
 npm run build
-npm start
+PORT=3000 node .next/standalone/server.js
 ```
 
-The app is configured for standalone output. The build output is in `.next/standalone/`.
+The app is configured for standalone output, so use `node .next/standalone/server.js` instead of `next start`. Set `NEXTAUTH_URL` to the public HTTPS domain in production.
 
 ## Lazy Sync
 

@@ -2,7 +2,7 @@
  
 ## Completed Features
 - [x] **Project Setup**: Next.js 16 initialized with TypeScript, Tailwind CSS 4, and App Router.
-- [x] **Database**: Prisma schema defined with User, ApiKey, Movie, TvShow, SyncLog models.
+- [x] **Database**: Prisma schemas defined for PostgreSQL and MySQL/MariaDB with User, ApiKey, Movie, TvShow, SyncLog models.
 - [x] **Raw TMDB Cache**: Prisma `TmdbCache` model stores mirrored TMDB content responses.
 - [x] **Authentication**:
   - [x] next-auth Credentials Provider (username/password) with bcrypt.
@@ -42,6 +42,7 @@
   - [x] Standalone output configured in `next.config.ts`.
 - [x] **Performance & Stability**:
   - [x] Fixed Prisma client singleton to prevent connection leaks in dev mode.
+  - [x] Fixed MySQL startup by removing the hardcoded PostgreSQL adapter from `proxy.ts`.
   - [x] Implemented chunked concurrency for TV season/episode fetching to respect TMDB rate limits.
  
 ## Known Issues

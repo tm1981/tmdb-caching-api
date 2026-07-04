@@ -2,7 +2,7 @@ import { PrismaMariaDb } from '@prisma/adapter-mariadb'
 import { PrismaPg } from '@prisma/adapter-pg'
 
 export function getDatabaseProvider() {
-  const provider = process.env.DATABASE_PROVIDER || 'postgresql'
+  const provider = process.env.DATABASE_PROVIDER || process.env.DATABASE_URL?.split(':', 1)[0] || 'postgresql'
 
   if (provider === 'postgresql' || provider === 'mysql' || provider === 'mariadb') {
     return provider
