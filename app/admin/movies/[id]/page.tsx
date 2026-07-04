@@ -53,7 +53,8 @@ async function getMovie(tmdbId: number) {
     })
 
     return movie
-  } catch {
+  } catch (error) {
+    console.error(`Failed to lazy-sync movie ${tmdbId}`, error)
     return null
   }
 }

@@ -31,7 +31,7 @@ model Movie {
   tmdbId              Int       @unique
   title               String
   originalTitle       String
-  overview            String?
+  overview            String?   @db.Text
   posterPath          String?
   backdropPath        String?
   releaseDate         DateTime?
@@ -42,7 +42,7 @@ model Movie {
   productionCompanies Json?
   spokenLanguages     Json?
   status              String?
-  tagline             String?
+  tagline             String?   @db.Text
   imdbId              String?
   cast                Json?
   crew                Json?
@@ -57,7 +57,7 @@ model TvShow {
   tmdbId              Int       @unique
   name                String
   originalName        String
-  overview            String?
+  overview            String?   @db.Text
   posterPath          String?
   backdropPath        String?
   firstAirDate        DateTime?
@@ -82,15 +82,15 @@ model SyncLog {
   type      String
   tmdbId    Int?
   status    String
-  detail    String?
+  detail    String?  @db.Text
   createdAt DateTime @default(now())
 }
 
 model TmdbCache {
   id        Int      @id @default(autoincrement())
-  cacheKey  String   @unique
+  cacheKey  String   @unique @db.VarChar(512)
   path      String
-  query     String   @default("")
+  query     String   @db.Text
   payload   Json
   status    Int      @default(200)
   createdAt DateTime @default(now())

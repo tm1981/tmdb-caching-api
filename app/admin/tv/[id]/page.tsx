@@ -54,7 +54,8 @@ async function getTvShow(tmdbId: number) {
     })
 
     return show
-  } catch {
+  } catch (error) {
+    console.error(`Failed to lazy-sync TV show ${tmdbId}`, error)
     return null
   }
 }
