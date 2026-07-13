@@ -12,9 +12,43 @@ type SessionUser = {
 }
 
 const TWO_FACTOR_TTL_MS = 10 * 60 * 1000
+const LOGIN_WINDOW_MS = 15 * 60 * 1000
+const LOGIN_MAX_ATTEMPTS = 8
 
 // ponytail: in-memory 2FA works for one app server; move to DB/Redis when running multiple instances.
 const twoFactorCodes = new Map<string, { codeHash: string; expiresAt: number }>()
+// ponytail: in-memory login throttle is enough for one PM2 process; use Redis if clustering.
+const loginAttempts = new Map<string, { count: number; resetAt: number }>()
+
+function getHeader(headers: Headers | Record<string, string | string[] | undefined>, key: string) {
+  if (headers instanceof Headers) return headers.get(key)
+  const value = headers[key] || headers[key.toLowerCase()]
+  return Array.isArray(value) ? value[0] : value
+}
+
+function loginKey(headers: Headers | Record<string, string | string[] | undefined>, username: string) {
+  const forwarded = getHeader(headers, 'x-forwarded-for')?.split(',')[0]?.trim()
+  const ip = forwarded || getHeader(headers, 'x-real-ip') || 'unknown'
+  return `${ip}:${username}`
+}
+
+function checkLoginLimit(key: string) {
+  const now = Date.now()
+  const entry = loginAttempts.get(key)
+
+  if (!entry || entry.resetAt <= now) {
+    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS })
+    return true
+  }
+
+  if (entry.count >= LOGIN_MAX_ATTEMPTS) return false
+  entry.count++
+  return true
+}
+
+function clearLoginLimit(key: string) {
+  loginAttempts.delete(key)
+}
 
 function hashCode(username: string, code: string) {
   return createHash('sha256')
@@ -69,12 +103,15 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' },
         twoFactorCode: { label: 'Two-factor code', type: 'text' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.username || !credentials?.password) {
           return null
         }
 
         const username = credentials.username.toLowerCase()
+        const throttleKey = loginKey(req.headers || {}, username)
+        if (!checkLoginLimit(throttleKey)) return null
+
         const user = await prisma.user.findUnique({
           where: { username },
         })
@@ -94,6 +131,7 @@ export const authOptions: NextAuthOptions = {
             codeMatches(savedCode.codeHash, username, credentials.twoFactorCode)
           ) {
             twoFactorCodes.delete(username)
+            clearLoginLimit(throttleKey)
           } else {
             return null
           }

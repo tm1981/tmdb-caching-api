@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-Project now mirrors public TMDB content endpoints through a cached catch-all API and expanded admin dashboard. Build and lint pass.
+Project now mirrors public TMDB content endpoints through a cached catch-all API and expanded admin dashboard. Build and lint pass. Deployment uses normal `next start` behind PM2/nginx.
 
 ## Recent Changes
 - **Project Creation**: Built complete TMDB Service from scratch with Next.js 16, Prisma, next-auth, and shadcn/ui.
@@ -13,7 +13,9 @@ Project now mirrors public TMDB content endpoints through a cached catch-all API
 - **TMDB Integration**: Implemented TMDB API client with search, details, trending, top-rated, raw mirror requests, lazy-sync, manual sync, and mirror warmups.
 - **Database**: Defined Prisma schema with User, ApiKey, Movie, TvShow, SyncLog, and TmdbCache models.
 - **Multi-DB Startup**: `proxy.ts` now uses the shared provider-aware Prisma adapter, and docs/env examples default to MySQL install.
+- **Cleanup**: Removed stale tracked `app/generated/prisma` output, ignored future `app/generated/`, and unignored `prisma/migrations/`.
 
 ## Next Steps
 - Optional: add scheduled refresh using TMDB daily ID exports and changes endpoints.
 - Optional: generate OpenAPI docs if interactive API docs are needed.
+- PostgreSQL can use checked-in migrations with `npx prisma migrate deploy`; current MySQL/MariaDB installs use `npx prisma db push` unless a separate MySQL/MariaDB migration history is created.

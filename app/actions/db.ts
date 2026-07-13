@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/auth'
 import { hashApiKey } from '@/lib/api-keys'
 import prisma from '@/lib/prisma'
+import { paginationParams } from '@/lib/pagination'
 import { getCachedTmdb } from '@/lib/tmdb-cache'
 import {
   searchMovie,
@@ -21,7 +22,7 @@ import {
 // Movies
 export async function getMovies(page = 1, limit = 20, query = '') {
   await requireAdmin()
-  const skip = (page - 1) * limit
+  const pagination = paginationParams(page, limit)
 
   const where: any = {}
   if (query) {
@@ -34,14 +35,14 @@ export async function getMovies(page = 1, limit = 20, query = '') {
   const [movies, total] = await Promise.all([
     prisma.movie.findMany({
       where,
-      skip,
-      take: limit,
+      skip: pagination.skip,
+      take: pagination.limit,
       orderBy: { title: 'asc' },
     }),
     prisma.movie.count({ where }),
   ])
 
-  return { movies, total, totalPages: Math.ceil(total / limit) }
+  return { movies, total, totalPages: Math.ceil(total / pagination.limit) }
 }
 
 export async function getMovieById(id: number) {
@@ -62,7 +63,7 @@ export async function deleteMovie(tmdbId: number) {
 // TV Shows
 export async function getTvShows(page = 1, limit = 20, query = '') {
   await requireAdmin()
-  const skip = (page - 1) * limit
+  const pagination = paginationParams(page, limit)
 
   const where: any = {}
   if (query) {
@@ -75,14 +76,14 @@ export async function getTvShows(page = 1, limit = 20, query = '') {
   const [tvShows, total] = await Promise.all([
     prisma.tvShow.findMany({
       where,
-      skip,
-      take: limit,
+      skip: pagination.skip,
+      take: pagination.limit,
       orderBy: { name: 'asc' },
     }),
     prisma.tvShow.count({ where }),
   ])
 
-  return { tvShows, total, totalPages: Math.ceil(total / limit) }
+  return { tvShows, total, totalPages: Math.ceil(total / pagination.limit) }
 }
 
 export async function getTvShowById(id: number) {

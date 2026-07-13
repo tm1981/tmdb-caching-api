@@ -130,13 +130,21 @@ Mirrored TMDB responses are stored in `TmdbCache`:
 - `status`: upstream status, cached only for successful responses.
 - `createdAt`, `updatedAt`: cache timestamps.
 
-After adding this model to an existing database, run:
+After adding this model to an existing database, use the deployment path for your database provider.
+
+PostgreSQL with the checked-in migration history:
 
 ```bash
-npx prisma migrate dev --name add_tmdb_cache
+DATABASE_PROVIDER=postgresql npx prisma migrate deploy
 ```
 
-If this project is deployed without checked-in migrations, run the equivalent production migration before starting the app.
+MySQL/MariaDB with the current schema-based install:
+
+```bash
+DATABASE_PROVIDER=mysql npx prisma db push
+```
+
+The checked-in migrations are PostgreSQL-specific. Do not run them against MySQL/MariaDB.
 
 ## Admin Sync Page
 

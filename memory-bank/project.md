@@ -11,13 +11,13 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - Auth: next-auth v4 CredentialsProvider (username/password, bcrypt)
 - API access: Required `x-api-key` header, in-memory rate limiting (60 req/min per key)
 - Landing page = `/login`; no public API docs page
-- Deployment: Standalone output, self-hosted (not Vercel)
+- Deployment: Self-hosted with `next start` behind PM2/nginx (not Vercel)
 
 ## Progress
 ### Done
 - Project scaffolded at `C:\dev\next\tmdb-service` with Next.js 16
 - `proxy.ts` for admin session check + API key validation
-- Prisma 7 schema (`User`, `ApiKey`, `Movie`, `TvShow`, `SyncLog`) + `prisma.config.ts`
+- Prisma 7 schema (`User`, `ApiKey`, `Movie`, `TvShow`, `SyncLog`, `TmdbCache`) + `prisma.config.ts`
 - Migration `init` applied; seed script creates admin user + default API key
 - Core libs: `lib/prisma.ts`, `lib/tmdb.ts` (API client), `lib/ratelimit.ts` (sliding window)
 - next-auth CredentialsProvider in `app/api/auth/[...nextauth]/route.ts`
@@ -28,6 +28,8 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - Root `/` page redirects based on session cookie (logged in → `/admin/movies`, not logged in → `/login`)
 - TMDB API key verified working
 - MySQL startup fixed by using the shared provider-aware Prisma adapter in `proxy.ts`
+- Deployment simplified to normal `next start` for PM2/nginx
+- Stale generated Prisma output removed from `app/generated/`; PostgreSQL migrations are tracked, while MySQL/MariaDB currently use `prisma db push`
 
 ### In Progress
 - (none)
@@ -46,7 +48,7 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 1. Test API endpoints with curl/Postman
 2. Test lazy sync flow (request unknown TMDB ID)
 3. Verify admin dashboard sync buttons work end-to-end
-4. Production deployment
+4. Production deployment: PostgreSQL uses `npx prisma migrate deploy`; MySQL/MariaDB uses `npx prisma db push` until provider-specific migrations exist
 
 ## Key Files
 - `proxy.ts`: Middleware for auth session check + API key validation

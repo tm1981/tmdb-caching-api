@@ -4,8 +4,15 @@ import { getToken } from 'next-auth/jwt'
 import { PrismaClient } from '@prisma/client'
 import { hashApiKey } from '@/lib/api-keys'
 import { createPrismaAdapter } from '@/lib/database-provider'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter() })
+
+function clientIp(request: NextRequest) {
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || request.headers.get('x-real-ip')
+    || 'unknown'
+}
 
 export async function proxy(request: NextRequest) {
   const { nextUrl } = request
@@ -25,6 +32,14 @@ export async function proxy(request: NextRequest) {
   }
 
   if (nextUrl.pathname.startsWith('/api/v1/')) {
+    const ipLimit = checkRateLimit(`api-auth:${clientIp(request)}`, 120)
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests. Try again later.' },
+        { status: 429 }
+      )
+    }
+
     const apiKey = request.headers.get('x-api-key')
 
     if (!apiKey) {

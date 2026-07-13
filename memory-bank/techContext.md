@@ -29,5 +29,6 @@
 ## Configuration
 - `.env`: Contains `DATABASE_PROVIDER`, `DATABASE_URL`, `TMDB_API_KEY`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`.
 - `prisma/schema.prisma` / `prisma/schema.mysql.prisma`: Defines the provider-specific database schema.
-- `next.config.ts`: Next.js configuration with standalone output.
+- `prisma/migrations/`: Tracked PostgreSQL migration history for production deploys.
+- `next.config.ts`: Next.js configuration for normal `next start` self-hosting.
 - `proxy.ts`: Protects `/admin/*` routes and validates API keys on `/api/v1/*` routes.

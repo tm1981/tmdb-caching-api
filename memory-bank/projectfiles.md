@@ -49,6 +49,7 @@ This is a list of the core application files, excluding configuration files and 
 ## Database
 - `prisma/schema.prisma`: Schema definition for PostgreSQL database (User, ApiKey, Movie, TvShow, SyncLog, TmdbCache).
 - `prisma/schema.mysql.prisma`: Schema definition for MySQL/MariaDB database with the same models.
+- `prisma/migrations/`: Tracked PostgreSQL Prisma migrations for production `npx prisma migrate deploy`.
 - `prisma/seed.ts`: Seed script to create admin user and default API key.
 
 ## Proxy

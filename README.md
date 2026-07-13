@@ -81,6 +81,8 @@ DATABASE_URL=mysql://user:password@host:3306/tmdb_service
 
 ### 4. Set up the database
 
+For a new local/dev database, `db push` is the simplest setup path for any provider:
+
 ```bash
 # Generate Prisma Client for your selected database
 npm run db:generate
@@ -91,6 +93,49 @@ npm run db:push
 # Seed with admin user and default API key
 npm run db:seed
 ```
+
+## Database Migrations
+
+Prisma migration SQL is provider-specific. Do not run PostgreSQL migrations against MySQL/MariaDB, or MySQL migrations against PostgreSQL.
+
+This repository currently has PostgreSQL migration files in `prisma/migrations/`:
+
+```bash
+cat prisma/migrations/migration_lock.toml
+# provider = "postgresql"
+```
+
+### PostgreSQL production
+
+Use the checked-in migrations:
+
+```bash
+DATABASE_PROVIDER=postgresql npx prisma migrate deploy
+npm run build
+pm2 restart tmdb
+```
+
+Create a new PostgreSQL migration after schema changes:
+
+```bash
+DATABASE_PROVIDER=postgresql npx prisma migrate dev --name describe_change
+```
+
+Commit the generated `prisma/migrations/*` files.
+
+### MySQL / MariaDB production
+
+The checked-in migrations are not MySQL-compatible. For the current MySQL/MariaDB install, use:
+
+```bash
+DATABASE_PROVIDER=mysql npx prisma db push
+npm run build
+pm2 restart tmdb
+```
+
+Use `DATABASE_PROVIDER=mariadb` for MariaDB if your `.env` uses that provider.
+
+To use real MySQL/MariaDB migrations later, create a separate MySQL/MariaDB migration history from `prisma/schema.mysql.prisma` on a clean database, then commit that provider-specific migration set. Do not mix it with the PostgreSQL migration folder.
 
 ### 5. Run the development server
 
@@ -214,10 +259,10 @@ curl -H "x-api-key: your_api_key" "http://localhost:3000/api/v1/movies?page=2&li
 ```bash
 npm run db:generate
 npm run build
-PORT=3000 node .next/standalone/server.js
+PORT=3000 npm run start
 ```
 
-The app is configured for standalone output, so use `node .next/standalone/server.js` instead of `next start`. Set `NEXTAUTH_URL` to the public HTTPS domain in production.
+The app uses the normal Next.js production server via `next start`. Set `NEXTAUTH_URL` to the public HTTPS domain in production.
 
 ## Lazy Sync
 

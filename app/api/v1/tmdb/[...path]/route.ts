@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { tmdbRawRequest } from '@/lib/tmdb'
 
+const MAX_CACHE_KEY_LENGTH = 512
+
 const CONTENT_ROOTS = new Set([
   'movie',
   'tv',
@@ -73,6 +75,13 @@ export async function GET(
   const query = canonicalQuery(req.nextUrl.searchParams)
   const cacheKey = `${endpoint}?${query}`
   const refresh = req.nextUrl.searchParams.get('refresh') === 'true'
+
+  if (cacheKey.length > MAX_CACHE_KEY_LENGTH) {
+    return NextResponse.json(
+      { error: 'TMDB mirror query is too long.' },
+      { status: 414 },
+    )
+  }
 
   if (!refresh) {
     const cached = await prisma.tmdbCache.findUnique({ where: { cacheKey } })

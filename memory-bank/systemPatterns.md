@@ -17,7 +17,8 @@ The application is built on **Next.js 16 (App Router)** using React Server Compo
    - **Client Components**: Handle user interactions (forms, buttons) and call server actions.
 3. **Database**:
    - **PostgreSQL/MySQL/MariaDB**: Stores Users, API Keys, Movies, TV Shows, Sync Logs, and raw TMDB mirror cache entries.
-   - **Prisma**: ORM for type-safe database access via provider-aware adapter selection.
+- **Prisma**: ORM for type-safe database access via provider-aware adapter selection.
+- **Migrations**: The checked-in Prisma migrations are PostgreSQL-specific. MySQL/MariaDB installs currently use `prisma db push` unless a separate provider-specific migration history is created.
 
 ## Key Design Patterns
 - **"Use Server" for Actions**: All data mutations and sensitive API calls happen on the server.

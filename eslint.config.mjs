@@ -10,7 +10,6 @@ const eslintConfig = [
   },
   globalIgnores([
     '.next/**',
-    'app/generated/**',
     'next-env.d.ts',
   ]),
 ]

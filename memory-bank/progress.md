@@ -39,11 +39,13 @@
   - [x] Manual bulk sync from admin dashboard.
   - [x] TMDB mirror cache stats and paginated warmup controls on the sync page.
 - [x] **Deployment**:
-  - [x] Standalone output configured in `next.config.ts`.
+  - [x] Normal `next start` deployment configured for PM2/nginx.
+  - [x] PostgreSQL migrations are tracked; MySQL/MariaDB deployment uses `prisma db push` unless a separate provider-specific migration history is created.
 - [x] **Performance & Stability**:
   - [x] Fixed Prisma client singleton to prevent connection leaks in dev mode.
   - [x] Fixed MySQL startup by removing the hardcoded PostgreSQL adapter from `proxy.ts`.
   - [x] Implemented chunked concurrency for TV season/episode fetching to respect TMDB rate limits.
+  - [x] Removed stale tracked `app/generated/prisma` output.
  
 ## Known Issues
 - None currently.

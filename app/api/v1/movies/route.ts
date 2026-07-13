@@ -3,12 +3,15 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { checkRateLimit } from '@/lib/ratelimit'
+import { paginationParams } from '@/lib/pagination'
 
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams
 
-  const page = parseInt(searchParams.get('page') || '1')
-  const limit = parseInt(searchParams.get('limit') || '20')
+  const { page, limit, skip } = paginationParams(
+    searchParams.get('page') || undefined,
+    searchParams.get('limit') || undefined,
+  )
   const query = searchParams.get('q') || ''
   const apiKey = req.headers.get('x-api-key') || ''
 
@@ -19,8 +22,6 @@ export async function GET(req: NextRequest) {
       { status: 429 }
     )
   }
-
-  const skip = (page - 1) * limit
 
   const where: any = {}
   if (query) {
