@@ -15,6 +15,7 @@
 - **Runtime**: Node.js
 - **Package Manager**: npm
 - **Linting**: ESLint
+- **Build**: `npm run build` generates the provider-selected Prisma Client before running `next build`.
 
 ## Key Libraries
 - `@prisma/client`, `@prisma/adapter-pg`, `@prisma/adapter-mariadb`, `mariadb`: Database access for PostgreSQL, MySQL, and MariaDB.
