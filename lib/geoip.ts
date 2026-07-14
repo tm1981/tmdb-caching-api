@@ -10,6 +10,14 @@ let readerPromise: Promise<GeoIpReader | null> | null = null
 let retryAfter = 0
 let warnedUnavailable = false
 
+export function countryCodeFromGeoIp(result: {
+  country?: { isoCode?: string }
+  registeredCountry?: { isoCode?: string }
+}) {
+  const countryCode = (result.country?.isoCode ?? result.registeredCountry?.isoCode)?.toUpperCase()
+  return countryCode && /^[A-Z]{2}$/.test(countryCode) ? countryCode : null
+}
+
 function databasePath() {
   return path.resolve(
     /* turbopackIgnore: true */ process.cwd(),
@@ -55,8 +63,7 @@ export async function geoIpCountryCode(ipAddress: string): Promise<string | null
   if (!reader) return null
 
   try {
-    const countryCode = reader.country(ipAddress).country?.isoCode?.toUpperCase()
-    return countryCode && /^[A-Z]{2}$/.test(countryCode) ? countryCode : null
+    return countryCodeFromGeoIp(reader.country(ipAddress))
   } catch {
     return null
   }

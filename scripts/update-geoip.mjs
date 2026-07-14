@@ -14,6 +14,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { Reader } from '@maxmind/geoip2-node'
+import { countryCodeFromGeoIp } from '../lib/geoip.ts'
 
 const execFileAsync = promisify(execFile)
 const downloadUrl =
@@ -26,7 +27,7 @@ const targetPath = path.resolve(
 
 async function validateDatabase(filePath) {
   const reader = await Reader.open(filePath)
-  const countryCode = reader.country('1.1.1.1').country?.isoCode
+  const countryCode = countryCodeFromGeoIp(reader.country('1.1.1.1'))
 
   if (!countryCode) {
     throw new Error('The database did not return a country for the validation IP.')
