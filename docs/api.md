@@ -46,6 +46,8 @@ Responses keep TMDB's JSON shape. Cache status is returned in:
 x-tmdb-cache: hit | miss | bypass
 ```
 
+The normalized movie, TV, and search endpoints use the same values whenever cache state is known. `bypass` means the request did not use a reusable cache result.
+
 Use `refresh=true` to bypass the local cache and replace it on a successful TMDB response:
 
 ```http
@@ -145,6 +147,14 @@ DATABASE_PROVIDER=mysql npx prisma db push
 ```
 
 The checked-in migrations are PostgreSQL-specific. Do not run them against MySQL/MariaDB.
+
+## Admin Usage & Logs
+
+`/admin/usage` is available only to authenticated administrators. It shows request volume, distinct API-key/IP clients active in the last five minutes, success and cache hit rates, latency, rate limits, endpoints, countries, API keys, and a filterable request log.
+
+All `/api/v1` attempts are recorded, including authentication failures, rate limits, application errors, and successful responses. Raw API keys are never stored; sensitive query values are redacted. Exact IP addresses and logs are retained for 30 days and pruned from the background logging path.
+
+IP and ISO country values are read from forwarded headers. Configure nginx or your CDN to overwrite those headers at the trusted boundary rather than accepting client-provided values.
 
 ## Admin Sync Page
 

@@ -3,6 +3,7 @@
 ## Completed Features
 - [x] **Project Setup**: Next.js 16 initialized with TypeScript, Tailwind CSS 4, and App Router.
 - [x] **Database**: Prisma schemas defined for PostgreSQL and MySQL/MariaDB with User, ApiKey, Movie, TvShow, SyncLog models.
+- [x] **API Request Logs**: `ApiRequestLog` model and PostgreSQL migration with API-key snapshots and activity/time indexes.
 - [x] **Raw TMDB Cache**: Prisma `TmdbCache` model stores mirrored TMDB content responses.
 - [x] **Authentication**:
   - [x] next-auth Credentials Provider (username/password) with bcrypt.
@@ -28,6 +29,7 @@
   - [x] Movie/TV admin search falls back to TMDB when local cache has no match.
   - [x] Public search combines local cache results with TMDB multi-search.
   - [x] API key management (create, copy, toggle, delete).
+  - [x] Usage & Logs dashboard with range comparisons, analytics panels, URL filters, pagination, refresh, and responsive request details.
   - [x] Manual sync buttons (trending movies/TV, top-rated movies/TV).
   - [x] Sync logs table.
 - [x] **TMDB Integration**:
@@ -46,6 +48,8 @@
   - [x] Fixed MySQL startup by removing the hardcoded PostgreSQL adapter from `proxy.ts`.
   - [x] Implemented chunked concurrency for TV season/episode fetching to respect TMDB rate limits.
   - [x] Removed stale tracked `app/generated/prisma` output.
+  - [x] Non-blocking `/api/v1` logging with sensitive-query redaction and once-daily 30-day retention pruning.
+  - [x] Standardized known `x-tmdb-cache` values to `hit`, `miss`, or `bypass`.
  
 ## Known Issues
 - None currently.
@@ -53,5 +57,4 @@
 ## Future Improvements
 - **Automatic Sync**: Scheduled cron job for periodic data refresh.
 - **OpenAPI Documentation**: Generate an OpenAPI spec from `docs/api.md` if interactive docs are needed.
-- **Activity Logs**: Track API usage per key.
 - **Bulk Delete**: Delete multiple movies/TV shows at once from admin.

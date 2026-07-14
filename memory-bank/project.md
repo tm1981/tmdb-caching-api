@@ -1,7 +1,7 @@
 # TMDB Data Caching Service
 
 ## Goal
-Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin dashboard, PostgreSQL/MySQL/MariaDB support, and next-auth credentials login.
+Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin management and usage dashboards, PostgreSQL/MySQL/MariaDB support, and next-auth credentials login.
 
 ## Constraints & Preferences
 - Database: PostgreSQL, MySQL, or MariaDB selected by `DATABASE_PROVIDER` and `DATABASE_URL`
@@ -17,7 +17,7 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 ### Done
 - Project scaffolded at `C:\dev\next\tmdb-service` with Next.js 16
 - `proxy.ts` for admin session check + API key validation
-- Prisma 7 schema (`User`, `ApiKey`, `Movie`, `TvShow`, `SyncLog`, `TmdbCache`) + `prisma.config.ts`
+- Prisma 7 schema (`User`, `ApiKey`, `ApiRequestLog`, `Movie`, `TvShow`, `SyncLog`, `TmdbCache`) + `prisma.config.ts`
 - Migration `init` applied; seed script creates admin user + default API key
 - Core libs: `lib/prisma.ts`, `lib/tmdb.ts` (API client), `lib/ratelimit.ts` (sliding window)
 - next-auth CredentialsProvider in `app/api/auth/[...nextauth]/route.ts`
@@ -30,6 +30,8 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - MySQL startup fixed by using the shared provider-aware Prisma adapter in `proxy.ts`
 - Deployment simplified to normal `next start` for PM2/nginx
 - Stale generated Prisma output removed from `app/generated/`; PostgreSQL migrations are tracked, while MySQL/MariaDB currently use `prisma db push`
+- Admin-only `/admin/usage` dashboard with range comparisons, charts, filters, 25-row pagination, responsive request details, and refresh
+- Non-blocking `/api/v1` request logging via Next.js `after()`, including auth failures, rate limits, cache status, redacted query data, trusted proxy IP/country data, and 30-day pruning
 
 ### In Progress
 - (none)
@@ -43,12 +45,13 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - In-memory rate limiter per API key (Map with timestamp cleanup)
 - Lazy sync pattern: DB check → TMDB fetch → upsert → return
 - proxy.ts handles both admin session check and API key validation
+- Active clients are distinct authenticated API-key/IP pairs seen in the last five minutes
+- API request logs retain API-key label/prefix snapshots when keys are deleted; raw keys are never stored
 
 ## Next Steps
-1. Test API endpoints with curl/Postman
-2. Test lazy sync flow (request unknown TMDB ID)
-3. Verify admin dashboard sync buttons work end-to-end
-4. Production deployment: PostgreSQL uses `npx prisma migrate deploy`; MySQL/MariaDB uses `npx prisma db push` until provider-specific migrations exist
+1. Test lazy sync flow against uncached TMDB IDs in the deployment environment
+2. Verify admin sync buttons after production deployment
+3. Production deployment: PostgreSQL uses `npx prisma migrate deploy`; MySQL/MariaDB uses `npx prisma db push` until provider-specific migrations exist
 
 ## Key Files
 - `proxy.ts`: Middleware for auth session check + API key validation
@@ -60,6 +63,10 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - `app/admin/layout.tsx`: Sidebar navigation + `SignOutButton`
 - `lib/tmdb.ts`: TMDB API client with `getMovieDetails`, `getTvDetails`, `getTrending*`, `getTopRated*`
 - `lib/ratelimit.ts`: Sliding window rate limiter (60 req/min)
+- `lib/api-usage.ts`: Shared non-blocking API request logger and retention cleanup
+- `lib/usage-dashboard.ts`: Provider-neutral dashboard aggregations and request-log queries
+- `lib/usage.ts`: Usage ranges, query redaction, proxy metadata parsing, and chart helpers
+- `app/admin/usage/page.tsx`: Admin-only usage and logs page
 - `prisma.config.ts`: Prisma 7 config with `env('DATABASE_URL')` and seed command
 - `prisma/schema.prisma` / `prisma/schema.mysql.prisma`: Provider-specific schema files with shared models
 

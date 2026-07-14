@@ -157,6 +157,9 @@ After login, the admin dashboard provides:
 - **TV Shows** - Browse, search, and manage cached TV shows
 - **Sync** - Trigger bulk syncs (trending movies/TV, top rated)
 - **API Keys** - Create, manage, and revoke API keys
+- **Usage & Logs** - Inspect API traffic, active clients, cache performance, latency, countries, and individual requests
+
+The admin-only `/admin/usage` page records `/api/v1` attempts for 30 days. Sensitive query values are redacted, and raw API keys are never stored. IP and country values come from trusted reverse-proxy headers, so nginx or your CDN must overwrite forwarded headers at the network boundary.
 
 ## API Endpoints
 

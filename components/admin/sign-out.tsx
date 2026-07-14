@@ -11,7 +11,7 @@ export function SignOutButton() {
       className="w-full justify-start gap-2"
       onClick={() => signOut({ callbackUrl: '/login' })}
     >
-      <LogOut className="size-4" />
+      <LogOut data-icon="inline-start" />
       Sign Out
     </Button>
   )

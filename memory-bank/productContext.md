@@ -6,7 +6,7 @@ Consumers of TMDB data need a fast, reliable way to fetch movie and TV show info
 ## Solution
 A decoupled caching system consisting of:
 1. **Public API**: REST endpoints that serve cached TMDB data with lazy-sync. When data is requested but not found, it's fetched from TMDB, cached, and returned.
-2. **Admin Dashboard**: A password-protected interface for browsing cached data, managing API keys, and triggering manual syncs.
+2. **Admin Dashboard**: A password-protected interface for browsing cached data, managing API keys, triggering manual syncs, and inspecting API usage and request logs.
 
 ## User Experience
 - **Landing Page**: Redirects logged-in admins to `/admin/movies`; otherwise redirects to `/login`.
@@ -16,6 +16,7 @@ A decoupled caching system consisting of:
   - **TV Shows**: Searchable table of cached TV shows with posters, ratings, and TMDB IDs.
   - **API Keys**: Create, copy, toggle, and delete API keys for accessing the service.
   - **Sync**: Manual bulk sync buttons for trending/top-rated content with sync logs.
+  - **Usage & Logs**: Range comparisons, API activity charts, operational breakdowns, filters, pagination, and responsive request details.
 - **Public API**: JSON responses with pagination, lazy-sync, and rate limiting.
 
 ## Constraints

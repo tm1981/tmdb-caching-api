@@ -9,6 +9,7 @@
 - **Icons**: Lucide React
 - **Forms**: React Hook Form + Zod
 - **Authentication**: next-auth v4 (Credentials Provider)
+- **Background Work**: Next.js `after()` for non-blocking request analytics and retention cleanup
 
 ## Development Environment
 - **Runtime**: Node.js
@@ -32,3 +33,4 @@
 - `prisma/migrations/`: Tracked PostgreSQL migration history for production deploys.
 - `next.config.ts`: Next.js configuration for normal `next start` self-hosting.
 - `proxy.ts`: Protects `/admin/*` routes and validates API keys on `/api/v1/*` routes.
+- Reverse proxy/CDN: Must overwrite `x-forwarded-for`/`x-real-ip` and supported ISO country headers before requests reach the app.

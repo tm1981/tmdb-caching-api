@@ -4,8 +4,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getMovieDetails, extractMovieData } from '@/lib/tmdb'
 import { checkRateLimit } from '@/lib/ratelimit'
+import { withApiUsage } from '@/lib/api-usage'
 
-export async function GET(
+async function getMovie(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -29,8 +30,10 @@ export async function GET(
   let movie = await prisma.movie.findUnique({
     where: { tmdbId },
   })
+  let cacheStatus = 'hit'
 
   if (!movie) {
+    cacheStatus = 'miss'
     try {
       const data = await getMovieDetails(tmdbId)
       const movieData = extractMovieData(data)
@@ -50,7 +53,7 @@ export async function GET(
     } catch (error: any) {
       return NextResponse.json(
         { error: `Failed to fetch movie from TMDB: ${error.message}` },
-        { status: 502 }
+        { status: 502, headers: { 'x-tmdb-cache': 'bypass' } }
       )
     }
   }
@@ -118,5 +121,7 @@ export async function GET(
       posters: [],
       backdrops: [],
     },
-  })
+  }, { headers: { 'x-tmdb-cache': cacheStatus } })
 }
+
+export const GET = withApiUsage(getMovie)

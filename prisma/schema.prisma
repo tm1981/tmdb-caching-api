@@ -16,14 +16,37 @@ model User {
 }
 
 model ApiKey {
-  id        Int      @id @default(autoincrement())
-  keyHash   String?  @unique
-  keyPrefix String   @default("")
-  label     String
-  active    Boolean  @default(true)
-  owner     User     @relation(fields: [ownerId], references: [id])
-  ownerId   Int
-  createdAt DateTime @default(now())
+  id          Int             @id @default(autoincrement())
+  keyHash     String?         @unique
+  keyPrefix   String          @default("")
+  label       String
+  active      Boolean         @default(true)
+  owner       User            @relation(fields: [ownerId], references: [id])
+  ownerId     Int
+  requestLogs ApiRequestLog[]
+  createdAt   DateTime        @default(now())
+}
+
+model ApiRequestLog {
+  id           Int      @id @default(autoincrement())
+  apiKey       ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  apiKeyId     Int?
+  apiKeyLabel  String?
+  apiKeyPrefix String   @default("")
+  method       String   @default("GET")
+  endpoint     String
+  query        String   @default("")
+  status       Int
+  durationMs   Int
+  ipAddress    String
+  countryCode  String?
+  cacheStatus  String?
+  hourBucket   DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([hourBucket])
+  @@index([apiKeyId, createdAt])
 }
 
 model Movie {
@@ -53,28 +76,28 @@ model Movie {
 }
 
 model TvShow {
-  id                  Int       @id @default(autoincrement())
-  tmdbId              Int       @unique
-  name                String
-  originalName        String
-  overview            String?
-  posterPath          String?
-  backdropPath        String?
-  firstAirDate        DateTime?
-  voteAverage         Float?
-  voteCount           Int?
-  genres              Json?
-  status              String?
-  numberOfSeasons     Int?
-  numberOfEpisodes    Int?
-  originCountry       Json?
-  spokenLanguage      String?
-  cast                Json?
-  crew                Json?
-  videos              Json?
-  seasons             Json?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id               Int       @id @default(autoincrement())
+  tmdbId           Int       @unique
+  name             String
+  originalName     String
+  overview         String?
+  posterPath       String?
+  backdropPath     String?
+  firstAirDate     DateTime?
+  voteAverage      Float?
+  voteCount        Int?
+  genres           Json?
+  status           String?
+  numberOfSeasons  Int?
+  numberOfEpisodes Int?
+  originCountry    Json?
+  spokenLanguage   String?
+  cast             Json?
+  crew             Json?
+  videos           Json?
+  seasons          Json?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 model SyncLog {

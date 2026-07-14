@@ -15,6 +15,7 @@ The application is built on **Next.js 16 (App Router)** using React Server Compo
 2. **Admin Pages (`app/admin/`)**:
    - **Server Components**: Fetch data directly from DB via server actions.
    - **Client Components**: Handle user interactions (forms, buttons) and call server actions.
+   - `/admin/usage`: Server-only aggregations with URL-backed client controls; no public analytics endpoint.
 3. **Database**:
    - **PostgreSQL/MySQL/MariaDB**: Stores Users, API Keys, Movies, TV Shows, Sync Logs, and raw TMDB mirror cache entries.
 - **Prisma**: ORM for type-safe database access via provider-aware adapter selection.
@@ -25,6 +26,8 @@ The application is built on **Next.js 16 (App Router)** using React Server Compo
 - **Lazy Sync**: API routes check DB first. If not found, fetch from TMDB, cache, and return.
 - **TMDB Mirror Cache**: `/api/v1/tmdb/[...path]` mirrors public TMDB content GET endpoints and caches successful raw JSON responses in `TmdbCache`.
 - **Rate Limiting**: In-memory sliding window (60 req/min per API key).
+- **Request Logging**: `proxy.ts` logs proxy-generated failures and shared route wrappers log final handler responses through Next.js `after()` so analytics does not delay responses.
+- **Usage Retention**: Exact request logs are retained for 30 days and pruned once daily from the background write path; no cron or permanent aggregate tables.
 - **API Key Auth**: Middleware validates `x-api-key` header against DB.
 - **next-auth Auth**: Credentials Provider for admin login with bcrypt password hashing.
 - **Type Safety**: Zod schemas for forms, TypeScript for all logic.
@@ -43,6 +46,8 @@ The application is built on **Next.js 16 (App Router)** using React Server Compo
 - **Lazy Sync**: If data not in DB, fetch from TMDB, upsert to DB, log sync, return data.
 - **Raw Mirror Cache**: If a TMDB mirror response is cached, return it unchanged; otherwise fetch TMDB, cache successful JSON, and return it.
 - **Pagination**: All list endpoints support `page`, `limit`, and `q` query params.
+- **Usage Identity**: Active clients are distinct authenticated API-key/IP pairs seen during the last five minutes.
+- **Proxy Metadata**: IP/country analytics trust forwarded headers only after nginx/CDN overwrites them at the deployment boundary.
 
 ## Data Model
 **`User` Model**: Admin users with hashed passwords.
@@ -51,3 +56,4 @@ The application is built on **Next.js 16 (App Router)** using React Server Compo
 **`TvShow` Model**: Cached TV show data from TMDB (tmdbId, name, overview, poster, ratings, seasons, etc.).
 **`SyncLog` Model**: Log of sync operations (type, status, detail, timestamp).
 **`TmdbCache` Model**: Raw TMDB mirror response cache keyed by path and sorted query.
+**`ApiRequestLog` Model**: Request method/path, redacted query, status, latency, IP/country, cache status, UTC hour bucket, timestamp, and optional API-key relation plus immutable label/prefix snapshot.

@@ -26,6 +26,10 @@ This is a list of the core application files, excluding configuration files and 
 - `app/admin/tmdb/[...path]/page.tsx`: Raw TMDB JSON viewer backed by the mirror cache.
 - `app/admin/keys/page.tsx`: API key management with create, copy, toggle, delete actions.
 - `app/admin/sync/page.tsx`: Manual bulk sync buttons and sync logs table.
+- `app/admin/usage/page.tsx`: Admin-only usage and request-log dashboard.
+- `components/admin/admin-navigation.tsx`: Responsive desktop sidebar and mobile admin menu.
+- `components/admin/usage-dashboard.tsx`: Metrics, inline SVG charts, analytics panels, request table, and mobile details.
+- `components/admin/usage-controls.tsx`: URL-backed range, search, status, country, refresh, and mobile filter controls.
 - `components/admin/sync-buttons.tsx`: Client buttons for normalized syncs and TMDB mirror cache warmups.
 - `components/admin/refresh-button.tsx`: Client refresh button for movie, TV, and person detail pages.
 - `components/admin/back-button.tsx`: Client back button for person detail pages.
@@ -44,12 +48,17 @@ This is a list of the core application files, excluding configuration files and 
 - `lib/prisma.ts`: Singleton PrismaClient instance with provider-aware adapter.
 - `lib/tmdb.ts`: TMDB API client with functions for search, details, trending, top-rated.
 - `lib/ratelimit.ts`: In-memory rate limiter with sliding window cleanup.
+- `lib/api-usage.ts`: Shared `after()` request logging, API-key snapshots, and retention cleanup.
+- `lib/usage-dashboard.ts`: Prisma aggregations, comparisons, filters, P95 latency, and pagination.
+- `lib/usage.ts`: Usage types, UTC buckets, redaction, forwarded metadata parsing, percentages, and chart helpers.
+- `lib/usage.test.mjs`: Node assertion checks for usage helpers and empty-data behavior.
 - `lib/utils.ts`: Utility functions (cn, formatDate, formatRating).
 
 ## Database
-- `prisma/schema.prisma`: Schema definition for PostgreSQL database (User, ApiKey, Movie, TvShow, SyncLog, TmdbCache).
+- `prisma/schema.prisma`: PostgreSQL schema including `ApiRequestLog`.
 - `prisma/schema.mysql.prisma`: Schema definition for MySQL/MariaDB database with the same models.
 - `prisma/migrations/`: Tracked PostgreSQL Prisma migrations for production `npx prisma migrate deploy`.
+- `prisma/migrations/20260714120000_add_api_request_logs/migration.sql`: PostgreSQL request-log migration.
 - `prisma/seed.ts`: Seed script to create admin user and default API key.
 
 ## Proxy

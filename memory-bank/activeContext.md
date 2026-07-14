@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-Project now mirrors public TMDB content endpoints through a cached catch-all API and expanded admin dashboard. Build and lint pass. Deployment uses normal `next start` behind PM2/nginx.
+Project now includes an admin-only usage dashboard and non-blocking logging for every `/api/v1` attempt. Build, lint, Prisma validation, assertion tests, and responsive browser QA pass. Deployment uses normal `next start` behind PM2/nginx.
 
 ## Recent Changes
 - **Project Creation**: Built complete TMDB Service from scratch with Next.js 16, Prisma, next-auth, and shadcn/ui.
@@ -14,8 +14,12 @@ Project now mirrors public TMDB content endpoints through a cached catch-all API
 - **Database**: Defined Prisma schema with User, ApiKey, Movie, TvShow, SyncLog, and TmdbCache models.
 - **Multi-DB Startup**: `proxy.ts` now uses the shared provider-aware Prisma adapter, and docs/env examples default to MySQL install.
 - **Cleanup**: Removed stale tracked `app/generated/prisma` output, ignored future `app/generated/`, and unignored `prisma/migrations/`.
+- **Usage Logging**: Added `ApiRequestLog`, API-key snapshots, query redaction, cache state, IP/country metadata, UTC buckets, and once-daily 30-day pruning through `after()`.
+- **Usage Dashboard**: Added `/admin/usage` with 24h/7d/30d comparisons, active clients, success/cache rates, request charts, endpoints, countries, statuses, keys, P95 latency, rate limits, filters, and pagination.
+- **Responsive Admin Shell**: Added the teal selected navigation state, compact mobile menu, horizontally safe charts, and expandable mobile request rows.
 
 ## Next Steps
 - Optional: add scheduled refresh using TMDB daily ID exports and changes endpoints.
 - Optional: generate OpenAPI docs if interactive API docs are needed.
+- Configure nginx/CDN to overwrite forwarded IP and country headers at the trusted boundary.
 - PostgreSQL can use checked-in migrations with `npx prisma migrate deploy`; current MySQL/MariaDB installs use `npx prisma db push` unless a separate MySQL/MariaDB migration history is created.

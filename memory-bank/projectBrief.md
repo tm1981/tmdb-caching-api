@@ -5,6 +5,7 @@ TMDB Service is a web application and REST API designed to cache, serve, and man
 ## Core Features
 - **Public API**: REST endpoints for movies, TV shows, and combined search with lazy-sync from TMDB.
 - **Admin Dashboard**: Browse, search, and manage cached movie/TV data.
+- **Usage Dashboard**: Monitor API requests, clients, cache performance, latency, countries, statuses, and API keys without exposing analytics publicly.
 - **API Key Management**: Create, revoke, and manage API keys for accessing the service.
 - **Manual Sync**: Bulk sync trending and top-rated content from TMDB.
 - **Rate Limiting**: Per-key rate limiting (60 req/min) to protect the service.

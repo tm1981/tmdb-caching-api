@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { getPosterPath } from '@/lib/tmdb'
 import { getCachedTmdb } from '@/lib/tmdb-cache'
+import { withApiUsage } from '@/lib/api-usage'
 
 type TmdbSearchItem = {
   id: number
@@ -31,7 +32,7 @@ type TmdbSearchResponse = {
   total_results: number
 }
 
-export async function GET(req: NextRequest) {
+async function search(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams
   const query = searchParams.get('q') || ''
   const apiKey = req.headers.get('x-api-key') || ''
@@ -161,5 +162,7 @@ export async function GET(req: NextRequest) {
         })),
       },
     },
-  })
+  }, { headers: { 'x-tmdb-cache': tmdb.cache } })
 }
+
+export const GET = withApiUsage(search)

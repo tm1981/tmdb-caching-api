@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { tmdbRawRequest } from '@/lib/tmdb'
+import { withApiUsage } from '@/lib/api-usage'
 
 const MAX_CACHE_KEY_LENGTH = 512
 
@@ -57,7 +58,7 @@ function canonicalQuery(searchParams: URLSearchParams) {
     .join('&')
 }
 
-export async function GET(
+async function getTmdb(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
@@ -118,3 +119,5 @@ export async function GET(
     headers: { 'x-tmdb-cache': result.ok ? 'miss' : 'bypass' },
   })
 }
+
+export const GET = withApiUsage(getTmdb)

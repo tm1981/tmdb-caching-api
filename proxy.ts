@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client'
 import { hashApiKey } from '@/lib/api-keys'
 import { createPrismaAdapter } from '@/lib/database-provider'
 import { checkRateLimit } from '@/lib/ratelimit'
+import { queueProxyUsage, usageRequestHeaders } from '@/lib/api-usage'
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter() })
 
@@ -32,8 +33,10 @@ export async function proxy(request: NextRequest) {
   }
 
   if (nextUrl.pathname.startsWith('/api/v1/')) {
+    const startedAt = performance.now()
     const ipLimit = checkRateLimit(`api-auth:${clientIp(request)}`, 120)
     if (!ipLimit.allowed) {
+      queueProxyUsage(request, 429, startedAt)
       return NextResponse.json(
         { error: 'Too many requests. Try again later.' },
         { status: 429 }
@@ -43,6 +46,7 @@ export async function proxy(request: NextRequest) {
     const apiKey = request.headers.get('x-api-key')
 
     if (!apiKey) {
+      queueProxyUsage(request, 401, startedAt)
       return NextResponse.json(
         { error: 'Missing API key. Provide x-api-key header.' },
         { status: 401 }
@@ -53,22 +57,27 @@ export async function proxy(request: NextRequest) {
       const keyHash = await hashApiKey(apiKey)
       const key = await prisma.apiKey.findUnique({
         where: { keyHash },
+        select: { id: true, label: true, keyPrefix: true, active: true },
       })
 
       if (!key || !key.active) {
+        queueProxyUsage(request, 401, startedAt, key)
         return NextResponse.json(
           { error: 'Invalid or inactive API key.' },
           { status: 401 }
         )
       }
+
+      return NextResponse.next({
+        request: { headers: usageRequestHeaders(request, key) },
+      })
     } catch {
+      queueProxyUsage(request, 500, startedAt)
       return NextResponse.json(
         { error: 'Database error.' },
         { status: 500 }
       )
     }
-
-    return NextResponse.next()
   }
 
   return NextResponse.next()

@@ -4,8 +4,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getTvDetails, extractTvDataFull } from '@/lib/tmdb'
 import { checkRateLimit } from '@/lib/ratelimit'
+import { withApiUsage } from '@/lib/api-usage'
 
-export async function GET(
+async function getTvShow(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -29,8 +30,10 @@ export async function GET(
   let tvShow = await prisma.tvShow.findUnique({
     where: { tmdbId },
   })
+  let cacheStatus = 'hit'
 
   if (!tvShow) {
+    cacheStatus = 'miss'
     try {
       const data = await getTvDetails(tmdbId)
       const tvData = await extractTvDataFull(data, tmdbId)
@@ -50,7 +53,7 @@ export async function GET(
     } catch (error: any) {
       return NextResponse.json(
         { error: `Failed to fetch TV show from TMDB: ${error.message}` },
-        { status: 502 }
+        { status: 502, headers: { 'x-tmdb-cache': 'bypass' } }
       )
     }
   }
@@ -144,5 +147,7 @@ export async function GET(
         type: v.type,
       })) || [],
     },
-  })
+  }, { headers: { 'x-tmdb-cache': cacheStatus } })
 }
+
+export const GET = withApiUsage(getTvShow)

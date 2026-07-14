@@ -4,8 +4,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { paginationParams } from '@/lib/pagination'
+import { withApiUsage } from '@/lib/api-usage'
 
-export async function GET(req: NextRequest) {
+async function getMovies(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams
 
   const { page, limit, skip } = paginationParams(
@@ -51,13 +52,18 @@ export async function GET(req: NextRequest) {
     prisma.movie.count({ where }),
   ])
 
-  return NextResponse.json({
-    data: movies,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
+  return NextResponse.json(
+    {
+      data: movies,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     },
-  })
+    { headers: { 'x-tmdb-cache': 'hit' } },
+  )
 }
+
+export const GET = withApiUsage(getMovies)
