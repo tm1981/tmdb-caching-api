@@ -154,7 +154,7 @@ The checked-in migrations are PostgreSQL-specific. Do not run them against MySQL
 
 All `/api/v1` attempts are recorded, including authentication failures, rate limits, application errors, and successful responses. Raw API keys are never stored; sensitive query values are redacted. Exact IP addresses and logs are retained for 30 days and pruned from the background logging path.
 
-IP and ISO country values are read from forwarded headers. Configure nginx or your CDN to overwrite those headers at the trusted boundary rather than accepting client-provided values.
+IP and ISO country values are read from forwarded headers. Configure nginx or your CDN to overwrite those headers at the trusted boundary rather than accepting client-provided values. If the proxy supplies no country code, `@maxmind/geoip2-node` checks the local GeoLite2 Country database in the background logging path. Administrators update and validate that database from the Usage & Logs page.
 
 ## Admin Sync Page
 

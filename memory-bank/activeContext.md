@@ -16,10 +16,12 @@ Project now includes an admin-only usage dashboard and non-blocking logging for 
 - **Cleanup**: Removed stale tracked `app/generated/prisma` output, ignored future `app/generated/`, and unignored `prisma/migrations/`.
 - **Usage Logging**: Added `ApiRequestLog`, API-key snapshots, query redaction, cache state, IP/country metadata, UTC buckets, and once-daily 30-day pruning through `after()`.
 - **Usage Dashboard**: Added `/admin/usage` with 24h/7d/30d comparisons, active clients, success/cache rates, request charts, endpoints, countries, statuses, keys, P95 latency, rate limits, filters, and pagination.
+- **GeoIP Fallback**: Missing proxy country headers fall back to a watched local GeoLite2 Country MMDB; the admin-only Usage page can freshness-check, download, validate, and replace it.
 - **Responsive Admin Shell**: Added the teal selected navigation state, compact mobile menu, horizontally safe charts, and expandable mobile request rows.
 
 ## Next Steps
 - Optional: add scheduled refresh using TMDB daily ID exports and changes endpoints.
 - Optional: generate OpenAPI docs if interactive API docs are needed.
 - Configure nginx/CDN to overwrite forwarded IP and country headers at the trusted boundary.
+- Configure MaxMind credentials and update GeoLite2 from Admin > Usage & Logs when local country fallback is required.
 - PostgreSQL can use checked-in migrations with `npx prisma migrate deploy`; current MySQL/MariaDB installs use `npx prisma db push` unless a separate MySQL/MariaDB migration history is created.

@@ -3,6 +3,8 @@
 import { useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { CalendarDays, RefreshCw, Search, SlidersHorizontal } from 'lucide-react'
+import { toast } from 'sonner'
+import { updateGeoIpDatabase } from '@/app/actions/db'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -16,6 +18,29 @@ import {
 import type { UsageRange, UsageStatusFilter } from '@/lib/usage'
 
 type CountryOption = { code: string | null; name: string }
+
+export function GeoIpUpdateButton() {
+  const [pending, startTransition] = useTransition()
+
+  function updateDatabase() {
+    startTransition(async () => {
+      try {
+        const result = await updateGeoIpDatabase()
+        if ('error' in result) toast.error(result.error)
+        else toast.success(result.updated ? 'GeoIP database updated.' : 'GeoIP database is already current.')
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'GeoIP update failed.')
+      }
+    })
+  }
+
+  return (
+    <Button variant="outline" onClick={updateDatabase} disabled={pending}>
+      <RefreshCw data-icon="inline-start" className={pending ? 'animate-spin' : undefined} />
+      {pending ? 'Updating…' : 'Update GeoIP'}
+    </Button>
+  )
+}
 
 function useUsageQuery() {
   const router = useRouter()

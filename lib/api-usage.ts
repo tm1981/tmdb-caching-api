@@ -1,5 +1,6 @@
 import { after } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { geoIpCountryCode } from '@/lib/geoip'
 import prisma from '@/lib/prisma'
 import {
   clientCountryCode,
@@ -83,6 +84,10 @@ function usageWrite(
 }
 
 async function persistUsage(data: UsageWrite) {
+  if (!data.countryCode) {
+    data.countryCode = await geoIpCountryCode(data.ipAddress)
+  }
+
   await prisma.apiRequestLog.create({ data })
 
   const day = data.createdAt.toISOString().slice(0, 10)

@@ -49,10 +49,14 @@ This is a list of the core application files, excluding configuration files and 
 - `lib/tmdb.ts`: TMDB API client with functions for search, details, trending, top-rated.
 - `lib/ratelimit.ts`: In-memory rate limiter with sliding window cleanup.
 - `lib/api-usage.ts`: Shared `after()` request logging, API-key snapshots, and retention cleanup.
+- `lib/geoip.ts`: Lazy watched GeoLite2 Country reader used when proxy country metadata is absent.
 - `lib/usage-dashboard.ts`: Prisma aggregations, comparisons, filters, P95 latency, and pagination.
 - `lib/usage.ts`: Usage types, UTC buckets, redaction, forwarded metadata parsing, percentages, and chart helpers.
 - `lib/usage.test.mjs`: Node assertion checks for usage helpers and empty-data behavior.
 - `lib/utils.ts`: Utility functions (cn, formatDate, formatRating).
+
+## Operations
+- `scripts/update-geoip.mjs`: Server-only updater used by the authenticated admin action to freshness-check, validate, and replace GeoLite2 Country data.
 
 ## Database
 - `prisma/schema.prisma`: PostgreSQL schema including `ApiRequestLog`.

@@ -194,6 +194,17 @@ export async function getTmdbCacheStats() {
   }
 }
 
+export async function updateGeoIpDatabase() {
+  await requireAdmin()
+  try {
+    const { installDatabase } = await import('@/scripts/update-geoip.mjs')
+    return await installDatabase()
+  } catch (error) {
+    console.warn('GeoIP update failed:', error)
+    return { updated: false, error: error instanceof Error ? error.message : 'GeoIP update failed.' }
+  }
+}
+
 const tmdbWarmups = {
   core: [
     ['/configuration', {}, false],

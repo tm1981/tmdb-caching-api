@@ -159,7 +159,13 @@ After login, the admin dashboard provides:
 - **API Keys** - Create, manage, and revoke API keys
 - **Usage & Logs** - Inspect API traffic, active clients, cache performance, latency, countries, and individual requests
 
-The admin-only `/admin/usage` page records `/api/v1` attempts for 30 days. Sensitive query values are redacted, and raw API keys are never stored. IP and country values come from trusted reverse-proxy headers, so nginx or your CDN must overwrite forwarded headers at the network boundary.
+The admin-only `/admin/usage` page records `/api/v1` attempts for 30 days. Sensitive query values are redacted, and raw API keys are never stored. IP and country values come from trusted reverse-proxy headers, so nginx or your CDN must overwrite forwarded headers at the network boundary. When no country header is present, the logger can fall back to a local MaxMind GeoLite2 Country database.
+
+### GeoIP country fallback
+
+Create a free MaxMind account and license key, copy the `MAXMIND_*` and `GEOIP_DATABASE_PATH` values from `.env.example` into `.env`, restart the app, then click **Update GeoIP** on **Admin > Usage & Logs**. The admin-only action checks freshness, downloads only newer data, validates the MMDB, and replaces the previous database.
+
+The downloaded MMDB is ignored by Git. The application watches it for updates, and trusted proxy country headers still take precedence. Private, loopback, malformed, and MaxMind-unknown addresses remain `Unknown`.
 
 ## API Endpoints
 

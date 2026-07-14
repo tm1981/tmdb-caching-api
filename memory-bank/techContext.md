@@ -24,12 +24,14 @@
 - `sonner`: Toast notifications.
 - `react-hook-form`: Form state management.
 - `zod`: Schema validation.
+- `@maxmind/geoip2-node`: Local GeoLite2 Country lookup when trusted proxy country metadata is absent.
 
 ## External Services
 - **TMDB API**: Source of movie/TV data. Requires `TMDB_API_KEY` env var.
+- **MaxMind GeoLite2**: Optional local IP-country database. Updates require `MAXMIND_ACCOUNT_ID` and `MAXMIND_LICENSE_KEY`.
 
 ## Configuration
-- `.env`: Contains `DATABASE_PROVIDER`, `DATABASE_URL`, `TMDB_API_KEY`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`.
+- `.env`: Contains database, TMDB, authentication, and optional MaxMind GeoLite2 configuration.
 - `prisma/schema.prisma` / `prisma/schema.mysql.prisma`: Defines the provider-specific database schema.
 - `prisma/migrations/`: Tracked PostgreSQL migration history for production deploys.
 - `next.config.ts`: Next.js configuration for normal `next start` self-hosting.
