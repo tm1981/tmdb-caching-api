@@ -4,8 +4,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { getPosterPath } from '@/lib/tmdb'
-import { getCachedTmdb } from '@/lib/tmdb-cache'
+import { canonicalParams, getCachedTmdb } from '@/lib/tmdb-cache'
 import { withApiUsage } from '@/lib/api-usage'
+import {
+  applyManualSearchMapping,
+  manualSearchCacheKey,
+  MAX_TMDB_CACHE_KEY_LENGTH,
+  parseManualSearchMapping,
+} from '@/lib/search-mappings'
 
 type TmdbSearchItem = {
   id: number
@@ -34,7 +40,7 @@ type TmdbSearchResponse = {
 
 async function search(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams
-  const query = searchParams.get('q') || ''
+  const query = (searchParams.get('q') || '').trim()
   const apiKey = req.headers.get('x-api-key') || ''
 
   if (!query) {
@@ -52,9 +58,19 @@ async function search(req: NextRequest) {
     )
   }
 
-  const page = parseInt(searchParams.get('page') || '1')
+  const page = Math.max(parseInt(searchParams.get('page') || '1') || 1, 1)
+  const tmdbParams = {
+    query,
+    page,
+    language: 'en-US',
+    include_adult: 'false',
+  }
+  if (`/search/multi?${canonicalParams(tmdbParams)}`.length > MAX_TMDB_CACHE_KEY_LENGTH) {
+    return NextResponse.json({ error: 'Search query is too long' }, { status: 414 })
+  }
+  const mappingKey = manualSearchCacheKey(query)
 
-  const [movies, tvShows, tmdb] = await Promise.all([
+  const [movies, tvShows, tmdb, mappingRow] = await Promise.all([
     prisma.movie.findMany({
       where: {
         OR: [
@@ -95,15 +111,18 @@ async function search(req: NextRequest) {
         voteCount: true,
       },
     }),
-    getCachedTmdb<TmdbSearchResponse>('/search/multi', {
-      query,
-      page,
-      language: 'en-US',
-      include_adult: 'false',
-    }),
+    getCachedTmdb<TmdbSearchResponse>('/search/multi', tmdbParams),
+    mappingKey.length <= MAX_TMDB_CACHE_KEY_LENGTH
+      ? prisma.tmdbCache.findUnique({
+          where: { cacheKey: mappingKey },
+          select: { payload: true },
+        })
+      : Promise.resolve(null),
   ])
 
-  const tmdbResults = tmdb.payload.results || []
+  const manualMapping = parseManualSearchMapping(mappingRow?.payload)
+  const tmdbPayload = applyManualSearchMapping(tmdb.payload, manualMapping) as TmdbSearchResponse
+  const tmdbResults = tmdbPayload.results || []
   const tmdbMovies = tmdbResults.filter((item) => item.media_type === 'movie')
   const tmdbTvShows = tmdbResults.filter((item) => item.media_type === 'tv')
   const tmdbPeople = tmdbResults.filter((item) => item.media_type === 'person')
@@ -122,9 +141,9 @@ async function search(req: NextRequest) {
       })),
       tmdb: {
         cache: tmdb.cache,
-        page: tmdb.payload.page,
-        totalPages: tmdb.payload.total_pages,
-        totalResults: tmdb.payload.total_results,
+        page: tmdbPayload.page,
+        totalPages: tmdbPayload.total_pages,
+        totalResults: tmdbPayload.total_results,
         movies: tmdbMovies.map((m) => ({
           source: 'tmdb',
           tmdbId: m.id,

@@ -1,11 +1,22 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/auth'
 import { hashApiKey } from '@/lib/api-keys'
 import prisma from '@/lib/prisma'
 import { paginationParams } from '@/lib/pagination'
 import { getCachedTmdb } from '@/lib/tmdb-cache'
+import {
+  isUnresolvedSearchPayload,
+  manualSearchCacheKey,
+  manualSearchCacheQuery,
+  MAX_TMDB_CACHE_KEY_LENGTH,
+  normalizeSearchQuery,
+  parseManualSearchMapping,
+  SEARCH_MAPPING_PATH,
+  type SearchMediaType,
+} from '@/lib/search-mappings'
 import {
   searchMovie,
   searchTv,
@@ -99,6 +110,161 @@ export async function deleteTvShow(tmdbId: number) {
     where: { tmdbId },
   })
   revalidatePath('/admin/tv')
+}
+
+// Search fixes
+export async function getSearchFixes() {
+  await requireAdmin()
+  const [searches, mappingRows] = await Promise.all([
+    prisma.tmdbCache.findMany({
+      where: { path: { in: ['/search/multi', '/search/movie', '/search/tv'] } },
+      // ponytail: scan recent cache rows; paginate if unresolved search volume grows past 500.
+      take: 500,
+      orderBy: { updatedAt: 'desc' },
+      select: { path: true, query: true, payload: true, updatedAt: true },
+    }),
+    prisma.tmdbCache.findMany({
+      where: { path: SEARCH_MAPPING_PATH },
+      orderBy: { updatedAt: 'desc' },
+      select: { payload: true, updatedAt: true },
+    }),
+  ])
+
+  const mappings = mappingRows.flatMap((row) => {
+    const mapping = parseManualSearchMapping(row.payload)
+    return mapping ? [{ ...mapping, updatedAt: row.updatedAt }] : []
+  })
+  const mappedQueries = new Set(mappings.map((mapping) => normalizeSearchQuery(mapping.query)))
+  const unresolved = new Map<string, {
+    query: string
+    path: string
+    capturedAt: Date
+  }>()
+
+  for (const search of searches) {
+    const query = new URLSearchParams(search.query).get('query')?.trim()
+    const normalized = query ? normalizeSearchQuery(query) : ''
+    if (
+      !query
+      || !normalized
+      || mappedQueries.has(normalized)
+      || unresolved.has(normalized)
+      || !isUnresolvedSearchPayload(search.path, search.payload)
+    ) {
+      continue
+    }
+    unresolved.set(normalized, {
+      query,
+      path: search.path,
+      capturedAt: search.updatedAt,
+    })
+  }
+
+  return { unresolved: [...unresolved.values()], mappings }
+}
+
+export async function saveSearchMapping(formData: FormData) {
+  await requireAdmin()
+  const query = String(formData.get('query') || '').trim()
+  const mediaType = String(formData.get('mediaType') || '') as SearchMediaType
+  const tmdbId = Number(formData.get('tmdbId'))
+  const cacheKey = manualSearchCacheKey(query)
+
+  if (
+    !query
+    || (mediaType !== 'movie' && mediaType !== 'tv')
+    || !Number.isInteger(tmdbId)
+    || tmdbId < 1
+  ) {
+    redirect('/admin/search?error=Enter+a+search+text%2C+media+type%2C+and+valid+TMDB+ID.')
+  }
+  if (cacheKey.length > MAX_TMDB_CACHE_KEY_LENGTH) {
+    redirect('/admin/search?error=The+search+text+is+too+long.')
+  }
+
+  type TmdbDetails = {
+    id?: number
+    title?: string
+    original_title?: string
+    name?: string
+    original_name?: string
+    overview?: string
+    poster_path?: string | null
+    release_date?: string | null
+    first_air_date?: string | null
+    vote_average?: number | null
+    vote_count?: number | null
+    popularity?: number | null
+  }
+
+  let details: Awaited<ReturnType<typeof getCachedTmdb<TmdbDetails>>> | null = null
+  try {
+    details = await getCachedTmdb<TmdbDetails>(`/${mediaType}/${tmdbId}`, { language: 'en-US' })
+  } catch {
+    // The redirect below gives the admin a useful validation error.
+  }
+  const item = details?.payload
+  const title = mediaType === 'movie' ? item?.title : item?.name
+  if (details?.cache === 'bypass' || item?.id !== tmdbId || !title) {
+    redirect('/admin/search?error=That+TMDB+ID+could+not+be+loaded+for+the+selected+media+type.')
+  }
+
+  const searchItem = mediaType === 'movie'
+    ? {
+        id: tmdbId,
+        media_type: mediaType,
+        title,
+        original_title: item.original_title ?? title,
+        overview: item.overview ?? '',
+        poster_path: item.poster_path ?? null,
+        release_date: item.release_date ?? null,
+        vote_average: item.vote_average ?? null,
+        vote_count: item.vote_count ?? null,
+        popularity: item.popularity ?? null,
+      }
+    : {
+        id: tmdbId,
+        media_type: mediaType,
+        name: title,
+        original_name: item.original_name ?? title,
+        overview: item.overview ?? '',
+        poster_path: item.poster_path ?? null,
+        first_air_date: item.first_air_date ?? null,
+        vote_average: item.vote_average ?? null,
+        vote_count: item.vote_count ?? null,
+        popularity: item.popularity ?? null,
+      }
+
+  await prisma.tmdbCache.upsert({
+    where: { cacheKey },
+    create: {
+      cacheKey,
+      path: SEARCH_MAPPING_PATH,
+      query: manualSearchCacheQuery(query),
+      status: 200,
+      payload: { query, mediaType, tmdbId, item: searchItem },
+    },
+    update: {
+      query: manualSearchCacheQuery(query),
+      status: 200,
+      payload: { query, mediaType, tmdbId, item: searchItem },
+    },
+  })
+
+  revalidatePath('/admin/search')
+  redirect('/admin/search?saved=1')
+}
+
+export async function deleteSearchMapping(formData: FormData) {
+  await requireAdmin()
+  const query = String(formData.get('query') || '')
+  const cacheKey = manualSearchCacheKey(query)
+
+  if (cacheKey.length <= MAX_TMDB_CACHE_KEY_LENGTH) {
+    await prisma.tmdbCache.deleteMany({ where: { cacheKey, path: SEARCH_MAPPING_PATH } })
+  }
+  revalidatePath('/admin/search')
+  redirect('/admin/search?deleted=1')
 }
 
 // API Keys

@@ -23,6 +23,7 @@ This is a list of the core application files, excluding configuration files and 
 - `app/admin/tv/page.tsx`: Searchable table of cached TV shows with posters, ratings, pagination.
 - `app/admin/people/[id]/page.tsx`: Person detail page backed by the raw TMDB mirror cache.
 - `app/admin/people/page.tsx`: TMDB-backed people search page.
+- `app/admin/search/page.tsx`: Captured empty searches and manual query-to-TMDB-ID mapping controls.
 - `app/admin/tmdb/[...path]/page.tsx`: Raw TMDB JSON viewer backed by the mirror cache.
 - `app/admin/keys/page.tsx`: API key management with create, copy, toggle, delete actions.
 - `app/admin/sync/page.tsx`: Manual bulk sync buttons and sync logs table.
@@ -47,6 +48,7 @@ This is a list of the core application files, excluding configuration files and 
 ## Lib & Utilities
 - `lib/prisma.ts`: Singleton PrismaClient instance with provider-aware adapter.
 - `lib/tmdb.ts`: TMDB API client with functions for search, details, trending, top-rated.
+- `lib/search-mappings.ts`: Query normalization, mapping validation, and mapped-result insertion helpers.
 - `lib/ratelimit.ts`: In-memory rate limiter with sliding window cleanup.
 - `lib/api-usage.ts`: Shared `after()` request logging, API-key snapshots, and retention cleanup.
 - `lib/geoip.ts`: Lazy watched GeoLite2 Country reader used when proxy country metadata is absent.

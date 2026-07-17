@@ -25,6 +25,7 @@ The application is built on **Next.js 16 (App Router)** using React Server Compo
 - **"Use Server" for Actions**: All data mutations and sensitive API calls happen on the server.
 - **Lazy Sync**: API routes check DB first. If not found, fetch from TMDB, cache, and return.
 - **TMDB Mirror Cache**: `/api/v1/tmdb/[...path]` mirrors public TMDB content GET endpoints and caches successful raw JSON responses in `TmdbCache`.
+- **Manual Search Mapping**: Empty cached title searches are surfaced to admins; mappings reuse `TmdbCache` under `/search/manual` and are applied at response time without changing the raw upstream cache entry.
 - **Rate Limiting**: In-memory sliding window (60 req/min per API key).
 - **Request Logging**: `proxy.ts` logs proxy-generated failures and shared route wrappers log final handler responses through Next.js `after()` so analytics does not delay responses.
 - **Usage Retention**: Exact request logs are retained for 30 days and pruned once daily from the background write path; no cron or permanent aggregate tables.

@@ -4,8 +4,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { tmdbRawRequest } from '@/lib/tmdb'
 import { withApiUsage } from '@/lib/api-usage'
-
-const MAX_CACHE_KEY_LENGTH = 512
+import {
+  applyManualSearchMapping,
+  manualSearchCacheKey,
+  MAX_TMDB_CACHE_KEY_LENGTH,
+  parseManualSearchMapping,
+  type SearchMediaType,
+} from '@/lib/search-mappings'
 
 const CONTENT_ROOTS = new Set([
   'movie',
@@ -77,17 +82,32 @@ async function getTmdb(
   const cacheKey = `${endpoint}?${query}`
   const refresh = req.nextUrl.searchParams.get('refresh') === 'true'
 
-  if (cacheKey.length > MAX_CACHE_KEY_LENGTH) {
+  if (cacheKey.length > MAX_TMDB_CACHE_KEY_LENGTH) {
     return NextResponse.json(
       { error: 'TMDB mirror query is too long.' },
       { status: 414 },
     )
   }
 
+  const mappedSearch = ['/search/multi', '/search/movie', '/search/tv'].includes(endpoint)
+  const searchText = mappedSearch ? req.nextUrl.searchParams.get('query') || '' : ''
+  const expectedMediaType: SearchMediaType | undefined = endpoint === '/search/movie'
+    ? 'movie'
+    : endpoint === '/search/tv'
+      ? 'tv'
+      : undefined
+  const mappingPromise = searchText
+    ? prisma.tmdbCache.findUnique({
+        where: { cacheKey: manualSearchCacheKey(searchText) },
+        select: { payload: true },
+      })
+    : Promise.resolve(null)
+
   if (!refresh) {
     const cached = await prisma.tmdbCache.findUnique({ where: { cacheKey } })
     if (cached) {
-      return NextResponse.json(cached.payload, {
+      const mapping = parseManualSearchMapping((await mappingPromise)?.payload)
+      return NextResponse.json(applyManualSearchMapping(cached.payload, mapping, expectedMediaType), {
         status: cached.status,
         headers: { 'x-tmdb-cache': 'hit' },
       })
@@ -114,7 +134,8 @@ async function getTmdb(
     })
   }
 
-  return NextResponse.json(result.payload, {
+  const mapping = parseManualSearchMapping((await mappingPromise)?.payload)
+  return NextResponse.json(applyManualSearchMapping(result.payload, mapping, expectedMediaType), {
     status: result.status,
     headers: { 'x-tmdb-cache': result.ok ? 'miss' : 'bypass' },
   })

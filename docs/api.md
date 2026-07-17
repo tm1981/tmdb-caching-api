@@ -121,6 +121,15 @@ For broad TMDB compatibility, prefer `/api/v1/tmdb/*`.
 }
 ```
 
+Empty movie/TV searches are visible in the authenticated **Admin > Search Fixes** page. An admin can map the exact
+provider search text to a validated movie or TV TMDB ID. Mappings use Unicode normalization, ignore surrounding,
+repeated whitespace and letter case, and place the selected item first in:
+
+- `/api/v1/search`
+- `/api/v1/tmdb/search/multi`
+- `/api/v1/tmdb/search/movie`
+- `/api/v1/tmdb/search/tv`
+
 ## Database
 
 Mirrored TMDB responses are stored in `TmdbCache`:

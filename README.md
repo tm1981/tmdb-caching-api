@@ -155,6 +155,7 @@ After login, the admin dashboard provides:
 
 - **Movies** - Browse, search, and manage cached movies
 - **TV Shows** - Browse, search, and manage cached TV shows
+- **Search Fixes** - Resolve captured empty searches by mapping provider text to a TMDB movie or TV ID
 - **Sync** - Trigger bulk syncs (trending movies/TV, top rated)
 - **API Keys** - Create, manage, and revoke API keys
 - **Usage & Logs** - Inspect API traffic, active clients, cache performance, latency, countries, and individual requests
@@ -208,6 +209,10 @@ For TMDB-compatible content mirroring, use `/api/v1/tmdb/{tmdb_path}`. It forwar
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/v1/search?q=term` | Search both movies and TV shows |
+
+If TMDB returns no movie or TV result, the cached search appears in **Admin > Search Fixes**. A manual mapping is
+validated against TMDB and then placed first for matching normalized searches. The same mapping also applies to the
+TMDB mirror `/search/multi`, `/search/movie`, and `/search/tv` routes.
 
 ## Example Requests
 

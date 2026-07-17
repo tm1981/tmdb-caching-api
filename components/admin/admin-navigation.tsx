@@ -9,6 +9,7 @@ import {
   Key,
   Menu,
   RefreshCw,
+  Search,
   Tv,
   User,
 } from 'lucide-react'
@@ -27,6 +28,7 @@ const navItems = [
   { href: '/admin/movies', label: 'Movies', icon: Film },
   { href: '/admin/tv', label: 'TV Shows', icon: Tv },
   { href: '/admin/people', label: 'People', icon: User },
+  { href: '/admin/search', label: 'Search Fixes', icon: Search },
   { href: '/admin/keys', label: 'API Keys', icon: Key },
   { href: '/admin/sync', label: 'Sync', icon: RefreshCw },
   { href: '/admin/usage', label: 'Usage & Logs', icon: BarChart3 },
