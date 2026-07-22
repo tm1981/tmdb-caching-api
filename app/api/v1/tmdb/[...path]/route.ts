@@ -9,6 +9,7 @@ import {
   manualSearchCacheKey,
   MAX_TMDB_CACHE_KEY_LENGTH,
   parseManualSearchMapping,
+  tmdbSearchResponseHeaders,
   type SearchMediaType,
 } from '@/lib/search-mappings'
 
@@ -109,7 +110,7 @@ async function getTmdb(
       const mapping = parseManualSearchMapping((await mappingPromise)?.payload)
       return NextResponse.json(applyManualSearchMapping(cached.payload, mapping, expectedMediaType), {
         status: cached.status,
-        headers: { 'x-tmdb-cache': 'hit' },
+        headers: tmdbSearchResponseHeaders('hit', mapping, expectedMediaType),
       })
     }
   }
@@ -137,7 +138,7 @@ async function getTmdb(
   const mapping = parseManualSearchMapping((await mappingPromise)?.payload)
   return NextResponse.json(applyManualSearchMapping(result.payload, mapping, expectedMediaType), {
     status: result.status,
-    headers: { 'x-tmdb-cache': result.ok ? 'miss' : 'bypass' },
+    headers: tmdbSearchResponseHeaders(result.ok ? 'miss' : 'bypass', mapping, expectedMediaType),
   })
 }
 

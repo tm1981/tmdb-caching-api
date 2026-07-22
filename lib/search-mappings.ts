@@ -90,6 +90,24 @@ export function applyManualSearchMapping(
   }
 }
 
+export function manualSearchMappingApplies(
+  mapping: ManualSearchMapping | null,
+  expectedMediaType?: SearchMediaType,
+) {
+  return Boolean(mapping && (!expectedMediaType || mapping.mediaType === expectedMediaType))
+}
+
+export function tmdbSearchResponseHeaders(
+  cacheStatus: 'hit' | 'miss' | 'bypass',
+  mapping: ManualSearchMapping | null,
+  expectedMediaType?: SearchMediaType,
+) {
+  return {
+    'x-tmdb-cache': cacheStatus,
+    ...(manualSearchMappingApplies(mapping, expectedMediaType) && { 'x-tmdb-search-mapped': 'true' }),
+  }
+}
+
 export function isUnresolvedSearchPayload(path: string, payload: unknown) {
   if (!payload || typeof payload !== 'object') return false
   const results = (payload as { results?: unknown }).results

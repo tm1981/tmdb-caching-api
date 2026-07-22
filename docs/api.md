@@ -46,6 +46,8 @@ Responses keep TMDB's JSON shape. Cache status is returned in:
 x-tmdb-cache: hit | miss | bypass
 ```
 
+Mapped movie/TV searches also return `x-tmdb-search-mapped: true`. Clients may trust the first search result when this header is present because an administrator explicitly selected it.
+
 The normalized movie, TV, and search endpoints use the same values whenever cache state is known. `bypass` means the request did not use a reusable cache result.
 
 Use `refresh=true` to bypass the local cache and replace it on a successful TMDB response:
