@@ -32,5 +32,6 @@ export function createPrismaAdapter() {
     user: decodeURIComponent(databaseUrl.username),
     password: decodeURIComponent(databaseUrl.password),
     database: databaseUrl.pathname.replace(/^\//, ''),
+    allowPublicKeyRetrieval: true,
   })
 }
