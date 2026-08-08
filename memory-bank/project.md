@@ -32,6 +32,8 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - Stale generated Prisma output removed from `app/generated/`; PostgreSQL migrations are tracked, while MySQL/MariaDB currently use `prisma db push`
 - Admin-only `/admin/usage` dashboard with range comparisons, charts, filters, 25-row pagination, responsive request details, and refresh
 - Non-blocking `/api/v1` request logging via Next.js `after()`, including auth failures, rate limits, cache status, redacted query data, trusted proxy IP/country data, and 30-day pruning
+- Large-log usage navigation avoids duplicate current-period aggregates and calculates P95 from a bounded 5,000-row recent sample
+- Admins can permanently clear all API request logs after confirmation; the server action uses provider-specific native truncation
 
 ### In Progress
 - (none)
@@ -46,6 +48,7 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - Lazy sync pattern: DB check → TMDB fetch → upsert → return
 - proxy.ts handles both admin session check and API key validation
 - Active clients are distinct authenticated API-key/IP pairs seen in the last five minutes
+- Usage P95 is a recent bounded sample rather than an exact full-range percentile to keep large log tables responsive
 - API request logs retain API-key label/prefix snapshots when keys are deleted; raw keys are never stored
 
 ## Next Steps
@@ -64,8 +67,8 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - `lib/tmdb.ts`: TMDB API client with `getMovieDetails`, `getTvDetails`, `getTrending*`, `getTopRated*`
 - `lib/ratelimit.ts`: Sliding window rate limiter (60 req/min)
 - `lib/api-usage.ts`: Shared non-blocking API request logger and retention cleanup
-- `lib/usage-dashboard.ts`: Provider-neutral dashboard aggregations and request-log queries
-- `lib/usage.ts`: Usage ranges, query redaction, proxy metadata parsing, and chart helpers
+- `lib/usage-dashboard.ts`: Provider-neutral dashboard aggregations, bounded P95 sampling, and request-log queries
+- `lib/usage.ts`: Usage ranges, query redaction, proxy metadata parsing, percentile, and chart helpers
 - `app/admin/usage/page.tsx`: Admin-only usage and logs page
 - `prisma.config.ts`: Prisma 7 config with `env('DATABASE_URL')` and seed command
 - `prisma/schema.prisma` / `prisma/schema.mysql.prisma`: Provider-specific schema files with shared models

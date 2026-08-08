@@ -29,14 +29,14 @@ This is a list of the core application files, excluding configuration files and 
 - `app/admin/sync/page.tsx`: Manual bulk sync buttons and sync logs table.
 - `app/admin/usage/page.tsx`: Admin-only usage and request-log dashboard.
 - `components/admin/admin-navigation.tsx`: Responsive desktop sidebar and mobile admin menu.
-- `components/admin/usage-dashboard.tsx`: Metrics, inline SVG charts, analytics panels, request table, and mobile details.
-- `components/admin/usage-controls.tsx`: URL-backed range, search, status, country, refresh, and mobile filter controls.
+- `components/admin/usage-dashboard.tsx`: Metrics, inline SVG charts, analytics panels, request table, mobile details, and the log-clear control.
+- `components/admin/usage-controls.tsx`: URL-backed range, search, status, country, refresh, mobile filters, and confirmed manual log clearing.
 - `components/admin/sync-buttons.tsx`: Client buttons for normalized syncs and TMDB mirror cache warmups.
 - `components/admin/refresh-button.tsx`: Client refresh button for movie, TV, and person detail pages.
 - `components/admin/back-button.tsx`: Client back button for person detail pages.
 
 ## Server Actions
-- `app/actions/db.ts`: Server actions for all DB operations (CRUD for movies, TV, API keys, sync logs, sync operations).
+- `app/actions/db.ts`: Server actions for all DB operations (CRUD for movies, TV, API keys, request-log truncation, sync logs, sync operations).
 
 ## Components
 - `components/ui/`: Standard Shadcn UI components (Button, Input, Table, Badge, Card, Dialog, etc.).
@@ -52,8 +52,8 @@ This is a list of the core application files, excluding configuration files and 
 - `lib/ratelimit.ts`: In-memory rate limiter with sliding window cleanup.
 - `lib/api-usage.ts`: Shared `after()` request logging, API-key snapshots, and retention cleanup.
 - `lib/geoip.ts`: Lazy watched GeoLite2 Country reader used when proxy country metadata is absent.
-- `lib/usage-dashboard.ts`: Prisma aggregations, comparisons, filters, P95 latency, and pagination.
-- `lib/usage.ts`: Usage types, UTC buckets, redaction, forwarded metadata parsing, percentages, and chart helpers.
+- `lib/usage-dashboard.ts`: Prisma aggregations, comparisons, filters, bounded P95 latency sampling, and pagination.
+- `lib/usage.ts`: Usage types, UTC buckets, redaction, forwarded metadata parsing, percentages, percentile calculation, and chart helpers.
 - `lib/usage.test.mjs`: Node assertion checks for usage helpers and empty-data behavior.
 - `lib/utils.ts`: Utility functions (cn, formatDate, formatRating).
 

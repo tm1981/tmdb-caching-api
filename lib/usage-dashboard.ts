@@ -6,6 +6,7 @@ import {
   parseUsageRange,
   percentage,
   percentChange,
+  percentile95,
   usageRangeHours,
   utcHour,
   type UsageRange,
@@ -14,6 +15,7 @@ import {
 
 const HOUR_MS = 60 * 60 * 1000
 const PAGE_SIZE = 25
+const LATENCY_SAMPLE_SIZE = 5000
 
 type DashboardInput = {
   range?: string
@@ -57,10 +59,6 @@ function statusCount(rows: StatusRow[], predicate: (status: number) => boolean) 
 
 function cacheCount(rows: CacheRow[], value: string) {
   return rows.find(row => row.cacheStatus === value)?._count._all || 0
-}
-
-function percentileSkip(count: number) {
-  return Math.max(0, Math.ceil(count * 0.95) - 1)
 }
 
 function seriesStepHours(range: UsageRange) {
@@ -160,9 +158,7 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
   const previousActiveStart = new Date(now.getTime() - 10 * 60 * 1000)
 
   const [
-    currentStatuses,
     previousStatuses,
-    currentCaches,
     previousCaches,
     activeClients,
     previousActiveClients,
@@ -173,13 +169,7 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
     countryRows,
     keyRows,
   ] = await Promise.all([
-    prisma.apiRequestLog.groupBy({ by: ['status'], where: currentWhere, _count: { _all: true } }),
     prisma.apiRequestLog.groupBy({ by: ['status'], where: previousWhere, _count: { _all: true } }),
-    prisma.apiRequestLog.groupBy({
-      by: ['cacheStatus'],
-      where: { ...currentWhere, cacheStatus: { in: ['hit', 'miss'] } },
-      _count: { _all: true },
-    }),
     prisma.apiRequestLog.groupBy({
       by: ['cacheStatus'],
       where: { ...previousWhere, cacheStatus: { in: ['hit', 'miss'] } },
@@ -226,6 +216,8 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
     }),
   ])
 
+  const currentStatuses = hourlyStatuses as HourlyStatusRow[]
+  const currentCaches = hourlyCaches as HourlyCacheRow[]
   const total = sumCounts(currentStatuses)
   const previousTotal = sumCounts(previousStatuses)
   const successful = statusCount(currentStatuses, status => status < 400)
@@ -271,25 +263,20 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
   }
   const logWhere: Prisma.ApiRequestLogWhereInput = { AND: logWhereParts }
 
-  const [currentP95, previousP95, logs, filteredTotal] = await Promise.all([
-    total
-      ? prisma.apiRequestLog.findMany({
-          where: currentWhere,
-          orderBy: { durationMs: 'asc' },
-          skip: percentileSkip(total),
-          take: 1,
-          select: { durationMs: true },
-        })
-      : [],
-    previousTotal
-      ? prisma.apiRequestLog.findMany({
-          where: previousWhere,
-          orderBy: { durationMs: 'asc' },
-          skip: percentileSkip(previousTotal),
-          take: 1,
-          select: { durationMs: true },
-        })
-      : [],
+  // ponytail: sample recent latency rows; pre-aggregate if exact full-range P95 becomes necessary.
+  const [currentLatencySample, previousLatencySample, logs, filteredTotal] = await Promise.all([
+    prisma.apiRequestLog.findMany({
+      where: currentWhere,
+      orderBy: { createdAt: 'desc' },
+      take: LATENCY_SAMPLE_SIZE,
+      select: { durationMs: true },
+    }),
+    prisma.apiRequestLog.findMany({
+      where: previousWhere,
+      orderBy: { createdAt: 'desc' },
+      take: LATENCY_SAMPLE_SIZE,
+      select: { durationMs: true },
+    }),
     prisma.apiRequestLog.findMany({
       where: logWhere,
       orderBy: { createdAt: 'desc' },
@@ -303,8 +290,8 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
     range,
     start,
     now,
-    hourlyStatuses as HourlyStatusRow[],
-    hourlyCaches as HourlyCacheRow[],
+    currentStatuses,
+    currentCaches,
     hourlyClients as HourlyClientRow[],
   )
   const topEndpoints = endpointRows.map(row => ({
@@ -327,8 +314,8 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
     { label: '5xx', count: statusCount(currentStatuses, status => status >= 500 && status < 600) },
     { label: 'Other', count: statusCount(currentStatuses, status => status < 200 || (status >= 300 && status < 400) || status >= 600) },
   ]
-  const p95Latency = currentP95[0]?.durationMs || 0
-  const previousP95Latency = previousP95[0]?.durationMs || 0
+  const p95Latency = percentile95(currentLatencySample.map(row => row.durationMs))
+  const previousP95Latency = percentile95(previousLatencySample.map(row => row.durationMs))
 
   return {
     range,

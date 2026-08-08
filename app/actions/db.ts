@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/auth'
 import { hashApiKey } from '@/lib/api-keys'
+import { getDatabaseProvider } from '@/lib/database-provider'
 import prisma from '@/lib/prisma'
 import { paginationParams } from '@/lib/pagination'
 import { getCachedTmdb } from '@/lib/tmdb-cache'
@@ -320,6 +321,16 @@ export async function deleteApiKey(id: number) {
 }
 
 // Sync Logs
+export async function clearApiRequestLogs() {
+  await requireAdmin()
+  if (getDatabaseProvider() === 'postgresql') {
+    await prisma.$executeRaw`TRUNCATE TABLE "ApiRequestLog" RESTART IDENTITY`
+  } else {
+    await prisma.$executeRaw`TRUNCATE TABLE ApiRequestLog`
+  }
+  revalidatePath('/admin/usage')
+}
+
 export async function getSyncLogs(limit = 50) {
   await requireAdmin()
   return prisma.syncLog.findMany({

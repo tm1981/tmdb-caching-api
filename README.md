@@ -158,9 +158,11 @@ After login, the admin dashboard provides:
 - **Search Fixes** - Resolve captured empty searches by mapping provider text to a TMDB movie or TV ID
 - **Sync** - Trigger bulk syncs (trending movies/TV, top rated)
 - **API Keys** - Create, manage, and revoke API keys
-- **Usage & Logs** - Inspect API traffic, active clients, cache performance, latency, countries, and individual requests
+- **Usage & Logs** - Inspect API traffic, active clients, cache performance, latency, countries, and individual requests; admins can permanently clear request logs after confirmation
 
-The admin-only `/admin/usage` page records `/api/v1` attempts for 30 days. Sensitive query values are redacted, and raw API keys are never stored. IP and country values come from trusted reverse-proxy headers, so nginx or your CDN must overwrite forwarded headers at the network boundary. When no country header is present, the logger can fall back to a local MaxMind GeoLite2 Country database.
+The admin-only `/admin/usage` page records `/api/v1` attempts for 30 days. Sensitive query values are redacted, and raw API keys are never stored. The dashboard reuses hourly aggregates and calculates P95 latency from the latest 5,000 requests in each comparison window so large log tables remain responsive. **Clear logs** permanently truncates the request-log table for the configured database after browser confirmation.
+
+IP and country values come from trusted reverse-proxy headers, so nginx or your CDN must overwrite forwarded headers at the network boundary. When no country header is present, the logger can fall back to a local MaxMind GeoLite2 Country database.
 
 ### GeoIP country fallback
 

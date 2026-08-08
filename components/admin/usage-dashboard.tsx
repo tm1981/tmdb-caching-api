@@ -12,7 +12,7 @@ import {
   Key,
   ShieldAlert,
 } from 'lucide-react'
-import { GeoIpUpdateButton, UsageFilters, UsageRangeControls } from '@/components/admin/usage-controls'
+import { ClearUsageLogsButton, GeoIpUpdateButton, UsageFilters, UsageRangeControls } from '@/components/admin/usage-controls'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -500,6 +500,7 @@ export function UsageDashboard({ data }: { data: UsageDashboardData }) {
           <p className="mt-1 text-sm text-muted-foreground">Monitor API traffic, clients, performance, and recent requests.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <ClearUsageLogsButton />
           <GeoIpUpdateButton />
           <UsageRangeControls range={data.range} />
         </div>

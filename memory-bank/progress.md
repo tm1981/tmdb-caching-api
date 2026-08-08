@@ -30,7 +30,7 @@
   - [x] Public search combines local cache results with TMDB multi-search.
   - [x] Search Fixes captures empty cached searches and supports validated manual query-to-TMDB-ID mappings.
   - [x] API key management (create, copy, toggle, delete).
-  - [x] Usage & Logs dashboard with range comparisons, analytics panels, URL filters, pagination, refresh, and responsive request details.
+  - [x] Usage & Logs dashboard with range comparisons, analytics panels, URL filters, pagination, refresh, responsive request details, and confirmed manual log clearing.
   - [x] Manual sync buttons (trending movies/TV, top-rated movies/TV).
   - [x] Sync logs table.
 - [x] **TMDB Integration**:
@@ -51,6 +51,7 @@
   - [x] Removed stale tracked `app/generated/prisma` output.
   - [x] Non-blocking `/api/v1` logging with sensitive-query redaction and once-daily 30-day retention pruning.
   - [x] Standardized known `x-tmdb-cache` values to `hit`, `miss`, or `bypass`.
+  - [x] Reduced large-log dashboard work by reusing hourly status/cache groupings and sampling the newest 5,000 latency rows for P95.
  
 ## Known Issues
 - None currently.

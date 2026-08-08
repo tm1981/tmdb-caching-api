@@ -86,6 +86,12 @@ export function percentChange(current: number, previous: number) {
   return ((current - previous) / previous) * 100
 }
 
+export function percentile95(values: number[]) {
+  if (!values.length) return 0
+  const sorted = values.toSorted((a, b) => a - b)
+  return sorted[Math.ceil(sorted.length * 0.95) - 1]
+}
+
 export function normalizedCacheStatus(value: string | null) {
   return value === 'hit' || value === 'miss' || value === 'bypass' ? value : null
 }

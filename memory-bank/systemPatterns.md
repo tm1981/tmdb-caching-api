@@ -28,7 +28,8 @@ The application is built on **Next.js 16 (App Router)** using React Server Compo
 - **Manual Search Mapping**: Empty cached title searches are surfaced to admins; mappings reuse `TmdbCache` under `/search/manual` and are applied at response time without changing the raw upstream cache entry.
 - **Rate Limiting**: In-memory sliding window (60 req/min per API key).
 - **Request Logging**: `proxy.ts` logs proxy-generated failures and shared route wrappers log final handler responses through Next.js `after()` so analytics does not delay responses.
-- **Usage Retention**: Exact request logs are retained for 30 days and pruned once daily from the background write path; no cron or permanent aggregate tables.
+- **Usage Retention**: Exact request logs are retained for 30 days and pruned once daily from the background write path; admins can also clear the table manually through a confirmed provider-native truncate action.
+- **Large-Log Analytics**: Current totals reuse hourly status/cache groupings, while P95 latency is calculated from the latest 5,000 requests in each comparison window instead of sorting the full range.
 - **API Key Auth**: Middleware validates `x-api-key` header against DB.
 - **next-auth Auth**: Credentials Provider for admin login with bcrypt password hashing.
 - **Type Safety**: Zod schemas for forms, TypeScript for all logic.

@@ -2,9 +2,9 @@
 
 import { useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { CalendarDays, RefreshCw, Search, SlidersHorizontal } from 'lucide-react'
+import { CalendarDays, RefreshCw, Search, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { updateGeoIpDatabase } from '@/app/actions/db'
+import { clearApiRequestLogs, updateGeoIpDatabase } from '@/app/actions/db'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -18,6 +18,31 @@ import {
 import type { UsageRange, UsageStatusFilter } from '@/lib/usage'
 
 type CountryOption = { code: string | null; name: string }
+
+export function ClearUsageLogsButton() {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+
+  function clearLogs() {
+    if (!window.confirm('Permanently delete all API request logs? This cannot be undone.')) return
+    startTransition(async () => {
+      try {
+        await clearApiRequestLogs()
+        toast.success('API request logs cleared.')
+        router.refresh()
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to clear API request logs.')
+      }
+    })
+  }
+
+  return (
+    <Button variant="destructive" onClick={clearLogs} disabled={pending}>
+      <Trash2 data-icon="inline-start" />
+      {pending ? 'Clearing…' : 'Clear logs'}
+    </Button>
+  )
+}
 
 export function GeoIpUpdateButton() {
   const [pending, startTransition] = useTransition()
