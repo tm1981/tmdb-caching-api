@@ -2,9 +2,9 @@
 
 import { useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { CalendarDays, RefreshCw, Search, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { CalendarDays, RefreshCw, Search, ShieldBan, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { clearApiRequestLogs, updateGeoIpDatabase } from '@/app/actions/db'
+import { blockIpAddress, clearApiRequestLogs, unblockIpAddress, updateGeoIpDatabase } from '@/app/actions/db'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -18,6 +18,32 @@ import {
 import type { UsageRange, UsageStatusFilter } from '@/lib/usage'
 
 type CountryOption = { code: string | null; name: string }
+
+export function IpBlockButton({ address, blocked }: { address: string; blocked: boolean }) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+
+  function toggleBlock() {
+    if (!blocked && !window.confirm(`Block all API requests from ${address}?`)) return
+    startTransition(async () => {
+      try {
+        if (blocked) await unblockIpAddress(address)
+        else await blockIpAddress(address)
+        toast.success(`${address} ${blocked ? 'unblocked' : 'blocked'}. Changes apply within 5 seconds.`)
+        router.refresh()
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to update IP blocklist.')
+      }
+    })
+  }
+
+  return (
+    <Button variant={blocked ? 'outline' : 'destructive'} size="sm" onClick={toggleBlock} disabled={pending}>
+      {blocked ? <ShieldCheck data-icon="inline-start" /> : <ShieldBan data-icon="inline-start" />}
+      {pending ? 'Saving…' : blocked ? 'Unblock' : 'Block'}
+    </Button>
+  )
+}
 
 export function ClearUsageLogsButton() {
   const router = useRouter()

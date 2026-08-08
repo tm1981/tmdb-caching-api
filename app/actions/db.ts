@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/auth'
 import { hashApiKey } from '@/lib/api-keys'
 import { getDatabaseProvider } from '@/lib/database-provider'
+import { validIpAddress } from '@/lib/ip-address'
 import prisma from '@/lib/prisma'
 import { paginationParams } from '@/lib/pagination'
 import { getCachedTmdb } from '@/lib/tmdb-cache'
@@ -328,6 +329,26 @@ export async function clearApiRequestLogs() {
   } else {
     await prisma.$executeRaw`TRUNCATE TABLE ApiRequestLog`
   }
+  revalidatePath('/admin/usage')
+}
+
+export async function blockIpAddress(value: string) {
+  await requireAdmin()
+  const address = validIpAddress(value)
+  if (!address) throw new Error('Invalid IP address')
+  await prisma.blockedIp.upsert({
+    where: { address },
+    create: { address },
+    update: {},
+  })
+  revalidatePath('/admin/usage')
+}
+
+export async function unblockIpAddress(value: string) {
+  await requireAdmin()
+  const address = validIpAddress(value)
+  if (!address) throw new Error('Invalid IP address')
+  await prisma.blockedIp.deleteMany({ where: { address } })
   revalidatePath('/admin/usage')
 }
 

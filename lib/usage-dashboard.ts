@@ -31,6 +31,8 @@ type CacheRow = CountRow & { cacheStatus: string | null }
 type HourlyStatusRow = StatusRow & { hourBucket: Date }
 type HourlyCacheRow = CacheRow & { hourBucket: Date }
 type HourlyClientRow = { hourBucket: Date; apiKeyId: number | null; ipAddress: string }
+type TopIpRow = CountRow & { ipAddress: string; _avg: { durationMs: number | null } }
+type IpBreakdownRow = StatusRow & { ipAddress: string; cacheStatus: string | null }
 
 function statusFilter(value: string | undefined): UsageStatusFilter {
   return ['2xx', '4xx', '5xx', '429'].includes(value || '')
@@ -168,6 +170,8 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
     endpointRows,
     countryRows,
     keyRows,
+    topIpRows,
+    blockedIpRows,
   ] = await Promise.all([
     prisma.apiRequestLog.groupBy({ by: ['status'], where: previousWhere, _count: { _all: true } }),
     prisma.apiRequestLog.groupBy({
@@ -214,6 +218,15 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
       where: { ...currentWhere, apiKeyLabel: { not: null } },
       _count: { _all: true },
     }),
+    prisma.apiRequestLog.groupBy({
+      by: ['ipAddress'],
+      where: currentWhere,
+      _count: { _all: true },
+      _avg: { durationMs: true },
+      orderBy: { _count: { ipAddress: 'desc' } },
+      take: 8,
+    }),
+    prisma.blockedIp.findMany({ orderBy: { createdAt: 'desc' } }),
   ])
 
   const currentStatuses = hourlyStatuses as HourlyStatusRow[]
@@ -262,9 +275,10 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
     })
   }
   const logWhere: Prisma.ApiRequestLogWhereInput = { AND: logWhereParts }
+  const topIpAddresses = (topIpRows as TopIpRow[]).map(row => row.ipAddress)
 
   // ponytail: sample recent latency rows; pre-aggregate if exact full-range P95 becomes necessary.
-  const [currentLatencySample, previousLatencySample, logs, filteredTotal] = await Promise.all([
+  const [currentLatencySample, previousLatencySample, logs, filteredTotal, ipBreakdownRows] = await Promise.all([
     prisma.apiRequestLog.findMany({
       where: currentWhere,
       orderBy: { createdAt: 'desc' },
@@ -284,6 +298,13 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
       take: PAGE_SIZE,
     }),
     prisma.apiRequestLog.count({ where: logWhere }),
+    topIpAddresses.length
+      ? prisma.apiRequestLog.groupBy({
+          by: ['ipAddress', 'status', 'cacheStatus'],
+          where: { ...currentWhere, ipAddress: { in: topIpAddresses } },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
   ])
 
   const series = buildSeries(
@@ -308,6 +329,31 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
     }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 5)
+  const ipStats = new Map<string, { successful: number; failed: number; rateLimited: number; hits: number; misses: number }>()
+  for (const row of ipBreakdownRows as IpBreakdownRow[]) {
+    const stats = ipStats.get(row.ipAddress) || { successful: 0, failed: 0, rateLimited: 0, hits: 0, misses: 0 }
+    if (row.status < 400) stats.successful += row._count._all
+    else stats.failed += row._count._all
+    if (row.status === 429) stats.rateLimited += row._count._all
+    if (row.cacheStatus === 'hit') stats.hits += row._count._all
+    if (row.cacheStatus === 'miss') stats.misses += row._count._all
+    ipStats.set(row.ipAddress, stats)
+  }
+  const blockedIpSet = new Set(blockedIpRows.map(row => row.address))
+  const topIpAddressesWithStats = (topIpRows as TopIpRow[]).map(row => {
+    const stats = ipStats.get(row.ipAddress) || { successful: 0, failed: 0, rateLimited: 0, hits: 0, misses: 0 }
+    return {
+      address: row.ipAddress,
+      requests: row._count._all,
+      percent: percentage(row._count._all, total),
+      averageLatency: row._avg.durationMs || 0,
+      successful: stats.successful,
+      failed: stats.failed,
+      rateLimited: stats.rateLimited,
+      cacheHitRate: percentage(stats.hits, stats.hits + stats.misses),
+      blocked: blockedIpSet.has(row.ipAddress),
+    }
+  })
   const statusBreakdown = [
     { label: '2xx', count: statusCount(currentStatuses, status => status >= 200 && status < 300) },
     { label: '4xx', count: statusCount(currentStatuses, status => status >= 400 && status < 500) },
@@ -348,6 +394,8 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
     countries: countries.map(item => ({ ...item, percent: percentage(item.count, total) })),
     statusBreakdown: statusBreakdown.map(item => ({ ...item, percent: percentage(item.count, total) })),
     topApiKeys: topApiKeys.map(item => ({ ...item, percent: percentage(item.count, total) })),
+    topIpAddresses: topIpAddressesWithStats,
+    blockedIps: blockedIpRows,
     logs,
     pagination: {
       page,

@@ -8,11 +8,12 @@ import {
   ChevronRight,
   CircleDot,
   Clock3,
+  Eye,
   Globe2,
   Key,
   ShieldAlert,
 } from 'lucide-react'
-import { ClearUsageLogsButton, GeoIpUpdateButton, UsageFilters, UsageRangeControls } from '@/components/admin/usage-controls'
+import { ClearUsageLogsButton, GeoIpUpdateButton, IpBlockButton, UsageFilters, UsageRangeControls } from '@/components/admin/usage-controls'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -203,6 +204,79 @@ function TopEndpoints({ data }: { data: UsageDashboardData }) {
         <p className="text-sm text-muted-foreground">No endpoint traffic yet.</p>
       )}
     </div>
+  )
+}
+
+function ipDetailsHref(data: UsageDashboardData, address: string) {
+  const params = new URLSearchParams({ search: address })
+  if (data.range !== '24h') params.set('range', data.range)
+  return `/admin/usage?${params}`
+}
+
+function TopIpAddresses({ data }: { data: UsageDashboardData }) {
+  return (
+    <section className="min-w-0 rounded-md border">
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b px-4 py-3">
+        <div>
+          <h2 className="text-sm font-semibold">Top IP addresses</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Highest request volume in this time range. Blocked traffic is rejected before logging.</p>
+        </div>
+        <Badge variant="outline">{data.blockedIps.length} blocked</Badge>
+      </div>
+
+      {data.topIpAddresses.length ? (
+        <div className="grid gap-3 p-3 lg:grid-cols-2">
+          {data.topIpAddresses.map((item, index) => (
+            <details key={item.address} className="group rounded-md border">
+              <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-3 [&::-webkit-details-marker]:hidden">
+                <span className="text-xs text-muted-foreground">#{index + 1}</span>
+                <span className="font-mono text-sm font-semibold">{item.address}</span>
+                <Badge variant="outline" className="ml-auto">{wholeNumber.format(item.requests)} requests</Badge>
+                <Badge variant={item.failed ? 'destructive' : 'secondary'}>{wholeNumber.format(item.failed)} failed</Badge>
+                <Badge variant={item.blocked ? 'destructive' : 'secondary'}>
+                  {item.blocked ? 'Blocked' : `${item.percent.toFixed(1)}% of traffic`}
+                </Badge>
+                <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+              </summary>
+
+              <div className="border-t p-3">
+                <dl className="grid grid-cols-3 gap-x-3 gap-y-2 text-xs sm:grid-cols-6">
+                  <div><dt className="text-muted-foreground">Requests</dt><dd className="font-semibold tabular-nums">{wholeNumber.format(item.requests)}</dd></div>
+                  <div><dt className="text-muted-foreground">Successful</dt><dd className="font-semibold tabular-nums text-success">{wholeNumber.format(item.successful)}</dd></div>
+                  <div><dt className="text-muted-foreground">Failed</dt><dd className="font-semibold tabular-nums text-destructive">{wholeNumber.format(item.failed)}</dd></div>
+                  <div><dt className="text-muted-foreground">Rate limited</dt><dd className="font-semibold tabular-nums">{wholeNumber.format(item.rateLimited)}</dd></div>
+                  <div><dt className="text-muted-foreground">Cache hit</dt><dd className="font-semibold tabular-nums">{item.cacheHitRate.toFixed(1)}%</dd></div>
+                  <div><dt className="text-muted-foreground">Avg latency</dt><dd className="font-semibold tabular-nums">{wholeNumber.format(item.averageLatency)} ms</dd></div>
+                </dl>
+
+                <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={ipDetailsHref(data, item.address)}><Eye data-icon="inline-start" />View requests</Link>
+                  </Button>
+                  <IpBlockButton address={item.address} blocked={item.blocked} />
+                </div>
+              </div>
+            </details>
+          ))}
+        </div>
+      ) : (
+        <p className="px-4 py-8 text-center text-sm text-muted-foreground">No IP traffic in this range.</p>
+      )}
+
+      {data.blockedIps.length ? (
+        <div className="border-t px-4 py-3">
+          <p className="mb-2 text-xs font-medium">Blocked IP addresses</p>
+          <div className="flex flex-wrap gap-2">
+            {data.blockedIps.map(item => (
+              <div key={item.id} className="flex items-center gap-2 rounded-md border px-2 py-1.5">
+                <span className="font-mono text-xs">{item.address}</span>
+                <IpBlockButton address={item.address} blocked />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
   )
 }
 
@@ -518,6 +592,8 @@ export function UsageDashboard({ data }: { data: UsageDashboardData }) {
           <TopEndpoints data={data} />
         </section>
       </div>
+
+      <TopIpAddresses data={data} />
 
       <div className="hidden grid-cols-[1fr_0.9fr_1.25fr_0.9fr] divide-x rounded-md border md:grid">
         <section className="p-4"><h2 className="mb-3 text-sm font-semibold">Traffic by country</h2><CountryList data={data} /></section>

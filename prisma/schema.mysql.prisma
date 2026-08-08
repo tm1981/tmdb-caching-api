@@ -45,8 +45,15 @@ model ApiRequestLog {
   createdAt    DateTime @default(now())
 
   @@index([createdAt])
+  @@index([createdAt, ipAddress])
   @@index([hourBucket])
   @@index([apiKeyId, createdAt])
+}
+
+model BlockedIp {
+  id        Int      @id @default(autoincrement())
+  address   String   @unique @db.VarChar(45)
+  createdAt DateTime @default(now())
 }
 
 model Movie {

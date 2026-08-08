@@ -6,13 +6,28 @@ import { hashApiKey } from '@/lib/api-keys'
 import { createPrismaAdapter } from '@/lib/database-provider'
 import { checkRateLimit } from '@/lib/ratelimit'
 import { queueProxyUsage, usageRequestHeaders } from '@/lib/api-usage'
+import { validIpAddress } from '@/lib/ip-address'
+import { clientIp } from '@/lib/usage'
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter() })
+const BLOCKED_IP_CACHE_MS = 5000
+let blockedIps = new Set<string>()
+let blockedIpsExpireAt = 0
+let blockedIpsRefresh: Promise<void> | null = null
 
-function clientIp(request: NextRequest) {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-    || request.headers.get('x-real-ip')
-    || 'unknown'
+async function isBlockedIp(address: string) {
+  if (Date.now() >= blockedIpsExpireAt) {
+    blockedIpsRefresh ??= prisma.blockedIp.findMany({ select: { address: true } })
+      .then(rows => {
+        blockedIps = new Set(rows.map(row => row.address))
+        blockedIpsExpireAt = Date.now() + BLOCKED_IP_CACHE_MS
+      })
+      .finally(() => {
+        blockedIpsRefresh = null
+      })
+    await blockedIpsRefresh
+  }
+  return blockedIps.has(address)
 }
 
 export async function proxy(request: NextRequest) {
@@ -34,7 +49,17 @@ export async function proxy(request: NextRequest) {
 
   if (nextUrl.pathname.startsWith('/api/v1/')) {
     const startedAt = performance.now()
-    const ipLimit = checkRateLimit(`api-auth:${clientIp(request)}`, 120)
+    const ipAddress = validIpAddress(clientIp(request.headers))
+
+    try {
+      if (ipAddress && await isBlockedIp(ipAddress)) {
+        return NextResponse.json({ error: 'Access denied.' }, { status: 403 })
+      }
+    } catch {
+      return NextResponse.json({ error: 'Database error.' }, { status: 500 })
+    }
+
+    const ipLimit = checkRateLimit(`api-auth:${ipAddress || 'unknown'}`, 120)
     if (!ipLimit.allowed) {
       queueProxyUsage(request, 429, startedAt)
       return NextResponse.json(
