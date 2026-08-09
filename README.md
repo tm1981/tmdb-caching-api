@@ -52,6 +52,9 @@ DATABASE_URL=mysql://user:password@host:3306/tmdb_service
 TMDB_API_KEY=your_tmdb_api_key_here
 NEXTAUTH_SECRET=your_random_secret_here
 NEXTAUTH_URL=http://localhost:3000
+MEDIA_PUBLIC_URL=http://localhost:3000
+MEDIA_CACHE_MAX_BYTES=5368709120
+MEDIA_CACHE_MAX_FILE_BYTES=26214400
 ADMIN_USERNAME=admin@example.com
 ADMIN_PASSWORD=your_secure_password
 SMTP_HOST=smtp.example.com
@@ -145,6 +148,10 @@ npm run dev
 
 The app will be available at `http://localhost:3000`.
 
+TMDB images requested through `/media/t/p/{size}/{file}` are cached on disk in `data/media`. Set
+`MEDIA_PUBLIC_URL` to the service's public HTTPS origin in production and mount `data/media` on persistent
+storage. The defaults allow 5 GiB total and 25 MiB per image; oldest files are removed after the limit is exceeded.
+
 ### 6. Login to admin dashboard
 
 Go to `http://localhost:3000/login` and use the admin credentials you set in `.env`.
@@ -175,6 +182,10 @@ The downloaded MMDB is ignored by Git. The application watches it for updates, a
 All API endpoints require the `x-api-key` header. Rate limit: 60 requests per minute per key.
 
 For TMDB-compatible content mirroring, use `/api/v1/tmdb/{tmdb_path}`. It forwards public TMDB content GET endpoints, caches successful JSON responses, and keeps TMDB's response shape. See [docs/api.md](docs/api.md).
+
+`/api/v1/tmdb/configuration` keeps TMDB's existing response shape but advertises the local disk-backed
+`/media/t/p/` URL in `images.base_url` and `images.secure_base_url`. Movie, TV, search, and raw mirror payloads
+remain unchanged, including every `poster_path`, `backdrop_path`, `profile_path`, and `still_path` value.
 
 ### Movies
 

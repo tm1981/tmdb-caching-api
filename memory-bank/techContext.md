@@ -10,6 +10,7 @@
 - **Forms**: React Hook Form + Zod
 - **Authentication**: next-auth v4 (Credentials Provider)
 - **Background Work**: Next.js `after()` for non-blocking request analytics and retention cleanup
+- **Media Storage**: Local `data/media` filesystem cache with configurable total and per-file byte limits
 
 ## Development Environment
 - **Runtime**: Node.js

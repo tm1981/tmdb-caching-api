@@ -46,6 +46,27 @@ Responses keep TMDB's JSON shape. Cache status is returned in:
 x-tmdb-cache: hit | miss | bypass
 ```
 
+## Media Cache
+
+The existing TMDB configuration response advertises the service's disk-backed image base URL:
+
+```http
+GET /api/v1/tmdb/configuration
+```
+
+Its existing `images.base_url` and `images.secure_base_url` fields point to:
+
+```text
+{MEDIA_PUBLIC_URL}/media/t/p/
+```
+
+Clients continue combining that base URL, a size, and TMDB's unchanged relative image path. The first media
+request is fetched from `image.tmdb.org` and written atomically to `data/media`; later requests use the local file.
+Media responses expose `x-media-cache: hit | miss`. The media endpoint is public so browser image requests do not
+need to expose an API key. Configure `MEDIA_CACHE_MAX_BYTES` and `MEDIA_CACHE_MAX_FILE_BYTES` in bytes.
+
+No movie, TV, search, or raw TMDB content response fields are added, removed, or renamed by this feature.
+
 Mapped movie/TV searches also return `x-tmdb-search-mapped: true`. Clients may trust the first search result when this header is present because an administrator explicitly selected it.
 
 The normalized movie, TV, and search endpoints use the same values whenever cache state is known. `bypass` means the request did not use a reusable cache result.
