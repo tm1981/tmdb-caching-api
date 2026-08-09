@@ -16,6 +16,7 @@ This is a list of the core application files, excluding configuration files and 
 - `app/api/v1/tv/[id]/route.ts`: GET TV show by TMDB ID with lazy-sync from TMDB.
 - `app/api/v1/search/route.ts`: GET combined movie/TV search results.
 - `app/api/v1/tmdb/[...path]/route.ts`: GET raw TMDB-compatible content mirror with DB cache.
+- `app/media/t/p/[size]/[...path]/route.ts`: Public validated TMDB image endpoint backed by the local disk cache.
 
 ## Admin Pages
 - `app/admin/layout.tsx`: Admin layout with sidebar navigation and logout button.
@@ -48,6 +49,7 @@ This is a list of the core application files, excluding configuration files and 
 ## Lib & Utilities
 - `lib/prisma.ts`: Singleton PrismaClient instance with provider-aware adapter.
 - `lib/tmdb.ts`: TMDB API client with functions for search, details, trending, top-rated.
+- `lib/media-cache.ts`: TMDB image validation, fetch coalescing, atomic disk writes, configuration base URL substitution, and bounded cache trimming.
 - `lib/search-mappings.ts`: Query normalization, mapping validation, and mapped-result insertion helpers.
 - `lib/ratelimit.ts`: In-memory rate limiter with sliding window cleanup.
 - `lib/api-usage.ts`: Shared `after()` request logging, API-key snapshots, and retention cleanup.

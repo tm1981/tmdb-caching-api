@@ -3,4 +3,5 @@ node_modules/
 .env
 app/generated/
 /data/geoip/
+/data/media/
 *.tsbuildinfo

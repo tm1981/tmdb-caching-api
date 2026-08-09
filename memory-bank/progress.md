@@ -5,6 +5,7 @@
 - [x] **Database**: Prisma schemas defined for PostgreSQL and MySQL/MariaDB with User, ApiKey, Movie, TvShow, SyncLog models.
 - [x] **API Request Logs**: `ApiRequestLog` model and PostgreSQL migration with API-key snapshots and activity/time indexes.
 - [x] **Raw TMDB Cache**: Prisma `TmdbCache` model stores mirrored TMDB content responses.
+- [x] **TMDB Media Cache**: Public lazy image proxy stores validated TMDB images on disk with atomic writes, request coalescing, size limits, and compatibility-preserving `/configuration` discovery.
 - [x] **Authentication**:
   - [x] next-auth Credentials Provider (username/password) with bcrypt.
   - [x] Login page with React Hook Form + Zod.

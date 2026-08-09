@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-Project now includes an admin-only usage dashboard and non-blocking logging for every `/api/v1` attempt. Large-log navigation avoids duplicate current-period scans and uses bounded P95 samples; admins can permanently clear request logs after confirmation. Build, lint, Prisma validation, assertion tests, and responsive browser QA pass. Deployment uses normal `next start` behind PM2/nginx.
+Project now includes a public, disk-backed lazy TMDB image cache advertised through the existing mirrored `/configuration` response without changing movie, TV, search, or raw response structures. The admin-only usage dashboard and non-blocking logging cover every `/api/v1` attempt. Build and lint pass. Deployment uses normal `next start` behind PM2/nginx.
 
 ## Recent Changes
 - **Project Creation**: Built complete TMDB Service from scratch with Next.js 16, Prisma, next-auth, and shadcn/ui.
@@ -20,6 +20,7 @@ Project now includes an admin-only usage dashboard and non-blocking logging for 
 - **Large Log Performance**: Current status/cache totals reuse hourly groupings, and P95 latency uses the latest 5,000 rows per comparison window instead of sorting the full range.
 - **Manual Log Cleanup**: Added a confirmed admin-only **Clear logs** action using native PostgreSQL/MySQL/MariaDB table truncation.
 - **GeoIP Fallback**: Missing proxy country headers fall back to a watched local GeoLite2 Country MMDB; the admin-only Usage page can freshness-check, download, validate, and replace it.
+- **Media Cache**: `/media/t/p/{size}/{path}` validates and lazily caches TMDB images in `data/media`; `/api/v1/tmdb/configuration` advertises the local base URL using its existing fields. Cache size limits and oldest-file eviction prevent unbounded disk use.
 - **Responsive Admin Shell**: Added the teal selected navigation state, compact mobile menu, horizontally safe charts, and expandable mobile request rows.
 
 ## Next Steps
