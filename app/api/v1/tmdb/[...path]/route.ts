@@ -137,7 +137,13 @@ async function getTmdb(
   const mapping = parseManualSearchMapping((await mappingPromise)?.payload)
   return NextResponse.json(responsePayload(applyManualSearchMapping(result.payload, mapping, expectedMediaType)), {
     status: result.status,
-    headers: tmdbSearchResponseHeaders(result.ok ? 'miss' : 'bypass', mapping, expectedMediaType),
+    headers: {
+      ...tmdbSearchResponseHeaders(result.ok ? 'miss' : 'bypass', mapping, expectedMediaType),
+      ...(result.status === 429 && {
+        'x-ratelimit-source': 'tmdb',
+        'retry-after': result.retryAfter || '60',
+      }),
+    },
   })
 }
 

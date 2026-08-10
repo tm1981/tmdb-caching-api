@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getMovieDetails, extractMovieData } from '@/lib/tmdb'
-import { checkRateLimit } from '@/lib/ratelimit'
+import { checkRequestRateLimit, rateLimitResponse } from '@/lib/ratelimit'
 import { withApiUsage } from '@/lib/api-usage'
 
 async function getMovie(
@@ -13,12 +13,9 @@ async function getMovie(
   const { id } = await params
   const apiKey = req.headers.get('x-api-key') || ''
 
-  const rateLimit = checkRateLimit(apiKey)
+  const rateLimit = checkRequestRateLimit(req.headers, apiKey)
   if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: 'Rate limit exceeded. Try again later.' },
-      { status: 429 }
-    )
+    return rateLimitResponse(rateLimit)
   }
 
   const tmdbId = parseInt(id)

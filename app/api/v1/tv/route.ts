@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { checkRateLimit } from '@/lib/ratelimit'
+import { checkRequestRateLimit, rateLimitResponse } from '@/lib/ratelimit'
 import { paginationParams } from '@/lib/pagination'
 import { withApiUsage } from '@/lib/api-usage'
 
@@ -16,12 +16,9 @@ async function getTvShows(req: NextRequest) {
   const query = searchParams.get('q') || ''
   const apiKey = req.headers.get('x-api-key') || ''
 
-  const rateLimit = checkRateLimit(apiKey)
+  const rateLimit = checkRequestRateLimit(req.headers, apiKey)
   if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: 'Rate limit exceeded. Try again later.' },
-      { status: 429 }
-    )
+    return rateLimitResponse(rateLimit)
   }
 
   const where: any = {}

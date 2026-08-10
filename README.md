@@ -55,6 +55,7 @@ NEXTAUTH_URL=http://localhost:3000
 MEDIA_PUBLIC_URL=http://localhost:3000
 MEDIA_CACHE_MAX_BYTES=5368709120
 MEDIA_CACHE_MAX_FILE_BYTES=26214400
+RATE_LIMIT_BYPASS_IPS="203.0.113.10,2001:db8::1"
 ADMIN_USERNAME=admin@example.com
 ADMIN_PASSWORD=your_secure_password
 SMTP_HOST=smtp.example.com
@@ -170,6 +171,10 @@ After login, the admin dashboard provides:
 The admin-only `/admin/usage` page records `/api/v1` attempts for 30 days. Sensitive query values are redacted, and raw API keys are never stored. The dashboard reuses hourly aggregates and calculates P95 latency from the latest 5,000 requests in each comparison window so large log tables remain responsive. **Clear logs** permanently truncates the request-log table for the configured database after browser confirmation.
 
 IP and country values come from trusted reverse-proxy headers, so nginx or your CDN must overwrite forwarded headers at the network boundary. When no country header is present, the logger can fall back to a local MaxMind GeoLite2 Country database.
+
+`RATE_LIMIT_BYPASS_IPS` accepts a comma-separated list of exact trusted client IPs. These IPs bypass the local
+per-IP and per-key request limits, but not API-key authentication or blocked-IP checks. A local 429 response uses
+`x-ratelimit-source: tmdb-service`; an upstream TMDB 429 uses `x-ratelimit-source: tmdb`. Both include `retry-after`.
 
 ### GeoIP country fallback
 

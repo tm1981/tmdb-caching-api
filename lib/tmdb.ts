@@ -37,7 +37,7 @@ export async function tmdbRawRequest(endpoint: string, params: URLSearchParams) 
   })
   const payload = await res.json().catch(() => ({ status_message: res.statusText }))
 
-  return { ok: res.ok, status: res.status, payload }
+  return { ok: res.ok, status: res.status, payload, retryAfter: res.headers.get('retry-after') }
 }
 
 export async function searchMovie(query: string, page = 1) {

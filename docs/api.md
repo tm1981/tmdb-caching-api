@@ -11,7 +11,37 @@ All public endpoints require:
 x-api-key: your_api_key
 ```
 
-The service rate-limits each API key to 60 requests per minute.
+The service rate-limits each API key to 60 requests per minute and applies a separate 120 requests-per-minute
+IP guard before authentication. Exact trusted server IPs listed in `RATE_LIMIT_BYPASS_IPS` bypass both local
+limits, but still require a valid API key and remain subject to blocked-IP rules. Forwarded IP headers must be
+overwritten by the trusted nginx/CDN boundary.
+
+Local rate-limit responses are identifiable without parsing the message:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 42
+X-RateLimit-Source: tmdb-service
+```
+
+```json
+{
+  "error": "Rate limit exceeded. Try again later.",
+  "code": "RATE_LIMITED",
+  "source": "tmdb-service",
+  "retry_after": 42
+}
+```
+
+If the upstream TMDB API returns 429, mirror endpoints preserve TMDB's response body and status and add:
+
+```http
+X-RateLimit-Source: tmdb
+Retry-After: 60
+X-TMDB-Cache: bypass
+```
+
+Clients should branch on status `429`, inspect `X-RateLimit-Source`, and wait for `Retry-After` seconds before retrying.
 
 ## TMDB Mirror
 

@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { checkRateLimit } from '@/lib/ratelimit'
+import { checkRequestRateLimit, rateLimitResponse } from '@/lib/ratelimit'
 import { getPosterPath } from '@/lib/tmdb'
 import { canonicalParams, getCachedTmdb } from '@/lib/tmdb-cache'
 import { withApiUsage } from '@/lib/api-usage'
@@ -50,12 +50,9 @@ async function search(req: NextRequest) {
     )
   }
 
-  const rateLimit = checkRateLimit(apiKey)
+  const rateLimit = checkRequestRateLimit(req.headers, apiKey)
   if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: 'Rate limit exceeded. Try again later.' },
-      { status: 429 }
-    )
+    return rateLimitResponse(rateLimit)
   }
 
   const page = Math.max(parseInt(searchParams.get('page') || '1') || 1, 1)

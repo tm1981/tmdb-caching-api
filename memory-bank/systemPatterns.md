@@ -28,6 +28,7 @@ The application is built on **Next.js 16 (App Router)** using React Server Compo
 - **TMDB Media Cache**: `/media/t/p/{size}/{path}` lazily stores image CDN responses in `data/media`; the mirrored `/configuration` response substitutes only its existing image base URL values, leaving all content payload structures and relative paths unchanged.
 - **Manual Search Mapping**: Empty cached title searches are surfaced to admins; mappings reuse `TmdbCache` under `/search/manual` and are applied at response time without changing the raw upstream cache entry.
 - **Rate Limiting**: In-memory sliding window (60 req/min per API key).
+- **Trusted Rate-Limit Bypass**: Comma-separated exact IPs can bypass the local per-IP and per-key limit layers; API authentication and blocked-IP enforcement still run. Local and upstream 429 responses are distinguished by `x-ratelimit-source`.
 - **Request Logging**: `proxy.ts` logs proxy-generated failures and shared route wrappers log final handler responses through Next.js `after()` so analytics does not delay responses.
 - **Usage Retention**: Exact request logs are retained for 30 days and pruned once daily from the background write path; admins can also clear the table manually through a confirmed provider-native truncate action.
 - **Large-Log Analytics**: Current totals reuse hourly status/cache groupings, while P95 latency is calculated from the latest 5,000 requests in each comparison window instead of sorting the full range.
