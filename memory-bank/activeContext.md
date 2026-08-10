@@ -21,6 +21,7 @@ Project now includes a public, disk-backed lazy TMDB image cache advertised thro
 - **Manual Log Cleanup**: Added a confirmed admin-only **Clear logs** action using native PostgreSQL/MySQL/MariaDB table truncation.
 - **GeoIP Fallback**: Missing proxy country headers fall back to a watched local GeoLite2 Country MMDB; the admin-only Usage page can freshness-check, download, validate, and replace it.
 - **Media Cache**: `/media/t/p/{size}/{path}` validates and lazily caches TMDB images in `data/media`; `/api/v1/tmdb/configuration` advertises the local base URL using its existing fields. Cache size limits and oldest-file eviction prevent unbounded disk use.
+- **Concurrent Cache Writes**: Shared `TmdbCache` writes retry a Prisma `P2002` insert race as an update, preventing simultaneous cache misses across PM2 workers from returning 500 errors.
 - **Responsive Admin Shell**: Added the teal selected navigation state, compact mobile menu, horizontally safe charts, and expandable mobile request rows.
 
 ## Next Steps

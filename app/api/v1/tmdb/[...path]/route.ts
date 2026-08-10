@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma'
 import { tmdbRawRequest } from '@/lib/tmdb'
 import { withApiUsage } from '@/lib/api-usage'
 import { withLocalMediaConfiguration } from '@/lib/media-cache'
+import { upsertTmdbCache } from '@/lib/tmdb-cache'
 import {
   applyManualSearchMapping,
   manualSearchCacheKey,
@@ -124,19 +125,12 @@ async function getTmdb(
   const result = await tmdbRawRequest(endpoint, upstreamParams)
 
   if (result.ok) {
-    await prisma.tmdbCache.upsert({
-      where: { cacheKey },
-      create: {
-        cacheKey,
-        path: endpoint,
-        query,
-        status: result.status,
-        payload: result.payload,
-      },
-      update: {
-        status: result.status,
-        payload: result.payload,
-      },
+    await upsertTmdbCache({
+      cacheKey,
+      path: endpoint,
+      query,
+      status: result.status,
+      payload: result.payload,
     })
   }
 
