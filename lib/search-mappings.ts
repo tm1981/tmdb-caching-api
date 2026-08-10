@@ -1,7 +1,19 @@
 export const SEARCH_MAPPING_PATH = '/search/manual'
+export const SEARCH_CAPTURE_PATH = '/search/captured'
+export const SEARCH_CAPTURE_SOURCE_PATHS = ['/search/multi', '/search/movie', '/search/tv'] as const
 export const MAX_TMDB_CACHE_KEY_LENGTH = 512
 
 export type SearchMediaType = 'movie' | 'tv'
+export type SearchCaptureSourcePath = (typeof SEARCH_CAPTURE_SOURCE_PATHS)[number]
+
+export type SearchCapture = {
+  query: string
+  path: SearchCaptureSourcePath
+  dismissed?: boolean
+  occurrences?: number
+  firstSeen?: string
+  lastSeen?: string
+}
 
 type SearchItem = {
   id: number
@@ -26,6 +38,32 @@ export function manualSearchCacheQuery(query: string) {
 
 export function manualSearchCacheKey(query: string) {
   return `${SEARCH_MAPPING_PATH}?${manualSearchCacheQuery(query)}`
+}
+
+export function searchCaptureCacheKey(query: string) {
+  return `${SEARCH_CAPTURE_PATH}?${manualSearchCacheQuery(query)}`
+}
+
+export function isSearchCaptureSourcePath(path: string): path is SearchCaptureSourcePath {
+  return SEARCH_CAPTURE_SOURCE_PATHS.includes(path as SearchCaptureSourcePath)
+}
+
+export function parseSearchCapture(payload: unknown): SearchCapture | null {
+  if (!payload || typeof payload !== 'object') return null
+  const capture = payload as Partial<SearchCapture>
+  if (
+    typeof capture.query !== 'string'
+    || !normalizeSearchQuery(capture.query)
+    || typeof capture.path !== 'string'
+    || !isSearchCaptureSourcePath(capture.path)
+    || (capture.dismissed !== undefined && typeof capture.dismissed !== 'boolean')
+    || (capture.occurrences !== undefined && (!Number.isInteger(capture.occurrences) || capture.occurrences < 1))
+    || (capture.firstSeen !== undefined && Number.isNaN(Date.parse(capture.firstSeen)))
+    || (capture.lastSeen !== undefined && Number.isNaN(Date.parse(capture.lastSeen)))
+  ) {
+    return null
+  }
+  return capture as SearchCapture
 }
 
 export function parseManualSearchMapping(payload: unknown): ManualSearchMapping | null {

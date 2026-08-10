@@ -9,7 +9,7 @@ Project now includes a public, disk-backed lazy TMDB image cache advertised thro
 - **API Routes**: Built public API with movies, TV shows, and search endpoints. Added lazy-sync, pagination, rate limiting, and API key validation.
 - **TMDB Mirror**: Added `/api/v1/tmdb/[...path]` raw content mirror with DB caching and public-content allowlist.
 - **Search**: Public search now combines local cache results with cached TMDB multi-search. Admin movie/TV search always shows extra TMDB results.
-- **Search Fixes**: Empty cached movie/TV searches are surfaced at `/admin/search`; admins can map provider text to a validated TMDB ID, and mappings apply to normalized and raw mirror search routes.
+- **Search Fixes**: Empty movie/TV searches create durable markers with approximate frequency and first/last-seen statistics. Admins can preview and select cached TMDB movie/TV candidates, dismiss no-match captures, view dismissed items separately, and restore them later.
 - **Admin Dashboard**: Added people search/detail pages, raw TMDB JSON viewer, refresh-from-TMDB controls, cache age display, cache stats, and warmup controls.
 - **TMDB Integration**: Implemented TMDB API client with search, details, trending, top-rated, raw mirror requests, lazy-sync, manual sync, and mirror warmups.
 - **Database**: Defined Prisma schema with User, ApiKey, Movie, TvShow, SyncLog, and TmdbCache models.

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { checkRequestRateLimit, rateLimitResponse } from '@/lib/ratelimit'
 import { getPosterPath } from '@/lib/tmdb'
-import { canonicalParams, getCachedTmdb } from '@/lib/tmdb-cache'
+import { canonicalParams, getCachedTmdb, syncSearchCapture } from '@/lib/tmdb-cache'
 import { withApiUsage } from '@/lib/api-usage'
 import {
   applyManualSearchMapping,
@@ -116,6 +116,10 @@ async function search(req: NextRequest) {
         })
       : Promise.resolve(null),
   ])
+
+  if (tmdb.cache !== 'bypass') {
+    await syncSearchCapture('/search/multi', query, tmdb.payload)
+  }
 
   const manualMapping = parseManualSearchMapping(mappingRow?.payload)
   const tmdbPayload = applyManualSearchMapping(tmdb.payload, manualMapping) as TmdbSearchResponse

@@ -5,7 +5,7 @@ import prisma from '@/lib/prisma'
 import { tmdbRawRequest } from '@/lib/tmdb'
 import { withApiUsage } from '@/lib/api-usage'
 import { withLocalMediaConfiguration } from '@/lib/media-cache'
-import { upsertTmdbCache } from '@/lib/tmdb-cache'
+import { syncSearchCapture, upsertTmdbCache } from '@/lib/tmdb-cache'
 import {
   applyManualSearchMapping,
   manualSearchCacheKey,
@@ -113,6 +113,7 @@ async function getTmdb(
   if (!refresh) {
     const cached = await prisma.tmdbCache.findUnique({ where: { cacheKey } })
     if (cached) {
+      if (mappedSearch) await syncSearchCapture(endpoint, searchText, cached.payload)
       const mapping = parseManualSearchMapping((await mappingPromise)?.payload)
       return NextResponse.json(responsePayload(applyManualSearchMapping(cached.payload, mapping, expectedMediaType)), {
         status: cached.status,
@@ -132,6 +133,7 @@ async function getTmdb(
       status: result.status,
       payload: result.payload,
     })
+    if (mappedSearch) await syncSearchCapture(endpoint, searchText, result.payload)
   }
 
   const mapping = parseManualSearchMapping((await mappingPromise)?.payload)

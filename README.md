@@ -228,9 +228,12 @@ remain unchanged, including every `poster_path`, `backdrop_path`, `profile_path`
 |--------|----------|-------------|
 | `GET` | `/api/v1/search?q=term` | Search both movies and TV shows |
 
-If TMDB returns no movie or TV result, the cached search appears in **Admin > Search Fixes**. A manual mapping is
-validated against TMDB and then placed first for matching normalized searches. The same mapping also applies to the
-TMDB mirror `/search/multi`, `/search/movie`, and `/search/tv` routes.
+If TMDB returns no movie or TV result, a dedicated capture appears in **Admin > Search Fixes**. A manual mapping is
+validated against TMDB and then placed first for matching normalized searches. Captures with no valid TMDB match can
+be dismissed without deleting the raw TMDB response, viewed in a separate list, and restored later. The page tracks
+approximate occurrence counts plus first/last-seen times and includes a cached movie/TV result picker for one-click
+mapping. The same mapping and capture behavior applies to the TMDB mirror `/search/multi`, `/search/movie`, and
+`/search/tv` routes.
 
 ## Example Requests
 

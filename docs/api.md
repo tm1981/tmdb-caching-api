@@ -183,6 +183,13 @@ repeated whitespace and letter case, and place the selected item first in:
 - `/api/v1/tmdb/search/movie`
 - `/api/v1/tmdb/search/tv`
 
+Unresolved searches use dedicated `/search/captured` cache markers, so they are not lost when older raw search rows
+fall outside the admin page's legacy 500-row scan. Admins can dismiss searches that have no TMDB match; dismissed
+queries stay hidden on later requests and can be restored from a separate list. Capture markers keep approximate
+occurrence counts and first/last-seen timestamps. The page searches cached TMDB movie and TV results in parallel and
+offers one-click mapping after previewing the title, poster, year, rating, media type, and TMDB ID. Saving a mapping,
+or a later successful TMDB search, clears that capture state.
+
 ## Database
 
 Mirrored TMDB responses are stored in `TmdbCache`:

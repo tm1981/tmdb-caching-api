@@ -31,7 +31,7 @@
   - [x] Refresh-from-TMDB controls and cache age text on detail pages.
   - [x] Movie/TV admin search falls back to TMDB when local cache has no match.
   - [x] Public search combines local cache results with TMDB multi-search.
-  - [x] Search Fixes captures empty cached searches and supports validated manual query-to-TMDB-ID mappings.
+  - [x] Search Fixes uses durable markers with occurrence statistics, a cached TMDB result picker, dismiss/restore workflow, and validated manual mappings.
   - [x] API key management (create, copy, toggle, delete).
   - [x] Usage & Logs dashboard with range comparisons, analytics panels, URL filters, pagination, refresh, responsive request details, and confirmed manual log clearing.
   - [x] Manual sync buttons (trending movies/TV, top-rated movies/TV).

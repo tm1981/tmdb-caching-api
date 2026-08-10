@@ -8,14 +8,18 @@ import { getDatabaseProvider } from '@/lib/database-provider'
 import { validIpAddress } from '@/lib/ip-address'
 import prisma from '@/lib/prisma'
 import { paginationParams } from '@/lib/pagination'
-import { getCachedTmdb, upsertTmdbCache } from '@/lib/tmdb-cache'
+import { getCachedTmdb, setSearchCaptureDismissed, upsertTmdbCache } from '@/lib/tmdb-cache'
 import {
   isUnresolvedSearchPayload,
   manualSearchCacheKey,
   manualSearchCacheQuery,
   MAX_TMDB_CACHE_KEY_LENGTH,
   normalizeSearchQuery,
+  parseSearchCapture,
   parseManualSearchMapping,
+  searchCaptureCacheKey,
+  isSearchCaptureSourcePath,
+  SEARCH_CAPTURE_PATH,
   SEARCH_MAPPING_PATH,
   type SearchMediaType,
 } from '@/lib/search-mappings'
@@ -117,13 +121,18 @@ export async function deleteTvShow(tmdbId: number) {
 // Search fixes
 export async function getSearchFixes() {
   await requireAdmin()
-  const [searches, mappingRows] = await Promise.all([
+  const [searches, captureRows, mappingRows] = await Promise.all([
     prisma.tmdbCache.findMany({
       where: { path: { in: ['/search/multi', '/search/movie', '/search/tv'] } },
       // ponytail: scan recent cache rows; paginate if unresolved search volume grows past 500.
       take: 500,
       orderBy: { updatedAt: 'desc' },
       select: { path: true, query: true, payload: true, updatedAt: true },
+    }),
+    prisma.tmdbCache.findMany({
+      where: { path: SEARCH_CAPTURE_PATH },
+      orderBy: { updatedAt: 'desc' },
+      select: { payload: true, updatedAt: true },
     }),
     prisma.tmdbCache.findMany({
       where: { path: SEARCH_MAPPING_PATH },
@@ -141,7 +150,38 @@ export async function getSearchFixes() {
     query: string
     path: string
     capturedAt: Date
+    firstSeen: Date
+    occurrences: number
   }>()
+
+  const dismissedQueries = new Set<string>()
+  const dismissed: Array<{
+    query: string
+    path: string
+    capturedAt: Date
+    firstSeen: Date
+    occurrences: number
+  }> = []
+  for (const row of captureRows) {
+    const capture = parseSearchCapture(row.payload)
+    if (!capture) continue
+    const normalized = normalizeSearchQuery(capture.query)
+    const capturedAt = capture.lastSeen ? new Date(capture.lastSeen) : row.updatedAt
+    const firstSeen = capture.firstSeen ? new Date(capture.firstSeen) : row.updatedAt
+    const item = {
+      query: capture.query,
+      path: capture.path,
+      capturedAt,
+      firstSeen,
+      occurrences: capture.occurrences || 1,
+    }
+    if (capture.dismissed) {
+      dismissedQueries.add(normalized)
+      dismissed.push(item)
+    } else if (!mappedQueries.has(normalized)) {
+      unresolved.set(normalized, item)
+    }
+  }
 
   for (const search of searches) {
     const query = new URLSearchParams(search.query).get('query')?.trim()
@@ -150,6 +190,7 @@ export async function getSearchFixes() {
       !query
       || !normalized
       || mappedQueries.has(normalized)
+      || dismissedQueries.has(normalized)
       || unresolved.has(normalized)
       || !isUnresolvedSearchPayload(search.path, search.payload)
     ) {
@@ -159,10 +200,71 @@ export async function getSearchFixes() {
       query,
       path: search.path,
       capturedAt: search.updatedAt,
+      firstSeen: search.updatedAt,
+      occurrences: 1,
     })
   }
 
-  return { unresolved: [...unresolved.values()], mappings }
+  return {
+    unresolved: [...unresolved.values()].sort((a, b) => b.occurrences - a.occurrences || b.capturedAt.getTime() - a.capturedAt.getTime()),
+    dismissed,
+    mappings,
+  }
+}
+
+type MappingCandidatePayload = {
+  results?: Array<{
+    id?: number
+    title?: string
+    original_title?: string
+    name?: string
+    original_name?: string
+    poster_path?: string | null
+    release_date?: string | null
+    first_air_date?: string | null
+    vote_average?: number | null
+  }>
+}
+
+export async function searchTmdbMappingCandidates(query: string) {
+  await requireAdmin()
+  const cleanQuery = query.trim().slice(0, 200)
+  if (!cleanQuery) return []
+
+  const params = { query: cleanQuery, page: 1, language: 'en-US', include_adult: 'false' }
+  const [movies, tv] = await Promise.all([
+    getCachedTmdb<MappingCandidatePayload>('/search/movie', params),
+    getCachedTmdb<MappingCandidatePayload>('/search/tv', params),
+  ])
+
+  return [
+    ...(movies.cache === 'bypass' ? [] : movies.payload.results || []).slice(0, 6).flatMap(item => (
+      Number.isInteger(item.id) && item.title
+        ? [{
+            tmdbId: item.id as number,
+            mediaType: 'movie' as const,
+            title: item.title,
+            originalTitle: item.original_title || item.title,
+            posterPath: item.poster_path || null,
+            date: item.release_date || null,
+            voteAverage: item.vote_average ?? null,
+          }]
+        : []
+    )),
+    ...(tv.cache === 'bypass' ? [] : tv.payload.results || []).slice(0, 6).flatMap(item => (
+      Number.isInteger(item.id) && item.name
+        ? [{
+            tmdbId: item.id as number,
+            mediaType: 'tv' as const,
+            title: item.name,
+            originalTitle: item.original_name || item.name,
+            posterPath: item.poster_path || null,
+            date: item.first_air_date || null,
+            voteAverage: item.vote_average ?? null,
+          }]
+        : []
+    )),
+  ]
 }
 
 export async function saveSearchMapping(formData: FormData) {
@@ -244,6 +346,9 @@ export async function saveSearchMapping(formData: FormData) {
     status: 200,
     payload: { query, mediaType, tmdbId, item: searchItem },
   })
+  await prisma.tmdbCache.deleteMany({
+    where: { cacheKey: searchCaptureCacheKey(query), path: SEARCH_CAPTURE_PATH },
+  })
 
   revalidatePath('/admin/search')
   redirect('/admin/search?saved=1')
@@ -322,6 +427,44 @@ export async function clearApiRequestLogs() {
     await prisma.$executeRaw`TRUNCATE TABLE ApiRequestLog`
   }
   revalidatePath('/admin/usage')
+}
+
+export async function dismissSearchCapture(formData: FormData) {
+  await requireAdmin()
+  const query = String(formData.get('query') || '').trim()
+  const path = String(formData.get('path') || '')
+  const cacheKey = searchCaptureCacheKey(query)
+
+  if (
+    query
+    && normalizeSearchQuery(query)
+    && isSearchCaptureSourcePath(path)
+    && cacheKey.length <= MAX_TMDB_CACHE_KEY_LENGTH
+  ) {
+    await setSearchCaptureDismissed(path, query, true)
+  }
+
+  revalidatePath('/admin/search')
+  redirect('/admin/search?dismissed=1')
+}
+
+export async function restoreSearchCapture(formData: FormData) {
+  await requireAdmin()
+  const query = String(formData.get('query') || '').trim()
+  const path = String(formData.get('path') || '')
+  const cacheKey = searchCaptureCacheKey(query)
+
+  if (
+    query
+    && normalizeSearchQuery(query)
+    && isSearchCaptureSourcePath(path)
+    && cacheKey.length <= MAX_TMDB_CACHE_KEY_LENGTH
+  ) {
+    await setSearchCaptureDismissed(path, query, false)
+  }
+
+  revalidatePath('/admin/search')
+  redirect('/admin/search?restored=1')
 }
 
 export async function blockIpAddress(value: string) {
