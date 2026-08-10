@@ -1,5 +1,38 @@
+import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { tmdbRawRequest } from '@/lib/tmdb'
+import { retryPrismaUniqueConflict } from '@/lib/prisma-conflict'
+
+type TmdbCacheWrite = {
+  cacheKey: string
+  path: string
+  query: string
+  status: number
+  payload: Prisma.InputJsonValue
+}
+
+export function upsertTmdbCache(data: TmdbCacheWrite) {
+  const update = {
+    path: data.path,
+    query: data.query,
+    status: data.status,
+    payload: data.payload,
+  }
+
+  return retryPrismaUniqueConflict(
+    () => prisma.tmdbCache.upsert({
+      where: { cacheKey: data.cacheKey },
+      create: data,
+      update,
+      select: { updatedAt: true },
+    }),
+    () => prisma.tmdbCache.update({
+      where: { cacheKey: data.cacheKey },
+      data: update,
+      select: { updatedAt: true },
+    }),
+  )
+}
 
 export function canonicalParams(params: Record<string, string | number | undefined>) {
   return Object.entries(params)
@@ -34,20 +67,12 @@ export async function getCachedTmdb<T>(
   const result = await tmdbRawRequest(endpoint, new URLSearchParams(query))
   if (!result.ok) return { payload: result.payload as T, cache: 'bypass' as const, updatedAt: null }
 
-  const cached = await prisma.tmdbCache.upsert({
-    where: { cacheKey },
-    create: {
-      cacheKey,
-      path: endpoint,
-      query,
-      status: result.status,
-      payload: result.payload,
-    },
-    update: {
-      status: result.status,
-      payload: result.payload,
-    },
-    select: { updatedAt: true },
+  const cached = await upsertTmdbCache({
+    cacheKey,
+    path: endpoint,
+    query,
+    status: result.status,
+    payload: result.payload,
   })
 
   return { payload: result.payload as T, cache: 'miss' as const, updatedAt: cached.updatedAt }

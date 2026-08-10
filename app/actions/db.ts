@@ -8,7 +8,7 @@ import { getDatabaseProvider } from '@/lib/database-provider'
 import { validIpAddress } from '@/lib/ip-address'
 import prisma from '@/lib/prisma'
 import { paginationParams } from '@/lib/pagination'
-import { getCachedTmdb } from '@/lib/tmdb-cache'
+import { getCachedTmdb, upsertTmdbCache } from '@/lib/tmdb-cache'
 import {
   isUnresolvedSearchPayload,
   manualSearchCacheKey,
@@ -237,20 +237,12 @@ export async function saveSearchMapping(formData: FormData) {
         popularity: item.popularity ?? null,
       }
 
-  await prisma.tmdbCache.upsert({
-    where: { cacheKey },
-    create: {
-      cacheKey,
-      path: SEARCH_MAPPING_PATH,
-      query: manualSearchCacheQuery(query),
-      status: 200,
-      payload: { query, mediaType, tmdbId, item: searchItem },
-    },
-    update: {
-      query: manualSearchCacheQuery(query),
-      status: 200,
-      payload: { query, mediaType, tmdbId, item: searchItem },
-    },
+  await upsertTmdbCache({
+    cacheKey,
+    path: SEARCH_MAPPING_PATH,
+    query: manualSearchCacheQuery(query),
+    status: 200,
+    payload: { query, mediaType, tmdbId, item: searchItem },
   })
 
   revalidatePath('/admin/search')
