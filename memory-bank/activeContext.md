@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-Project now caps disposable TMDB database cache data at 100,000 rows by default across raw mirror responses, movies, and TV shows. The admin Sync page shows the combined count and provides a confirmed cache-clear action suitable before backups while preserving users, API keys, request logs, sync history, manual search corrections, and search-capture state. TMDB images remain in the independent bounded `data/media` disk cache. Build, lint, PostgreSQL/MySQL Prisma generation, TypeScript validation, and responsive browser QA pass. Deployment uses normal `next start` behind PM2/nginx.
+Project caps disposable TMDB database cache data at 100,000 rows by default across raw mirror responses, movies, and TV shows. Limit enforcement is a process-local single-flight background maintainer: checks are throttled, database operations are sequential, and eviction uses controlled 1,000-row batches to avoid MySQL connection-pool exhaustion. The admin Sync page shows the combined count and provides a serialized, batched cache-clear action suitable before backups while preserving users, API keys, request logs, sync history, manual search corrections, and search-capture state. TMDB images remain in the independent bounded `data/media` disk cache. Deployment uses normal `next start` behind PM2/nginx.
 
 ## Recent Changes
 - **Project Creation**: Built complete TMDB Service from scratch with Next.js 16, Prisma, next-auth, and shadcn/ui.
@@ -24,7 +24,7 @@ Project now caps disposable TMDB database cache data at 100,000 rows by default 
 - **Concurrent Cache Writes**: Shared `TmdbCache` writes retry a Prisma `P2002` insert race as an update, preventing simultaneous cache misses across PM2 workers from returning 500 errors.
 - **Trusted Rate-Limit Bypass**: Exact IPs in `RATE_LIMIT_BYPASS_IPS` skip both local limit layers while retaining authentication and blocking; 429 responses identify `tmdb-service` versus upstream `tmdb` and include `Retry-After`.
 - **Responsive Admin Shell**: Added the teal selected navigation state, compact mobile menu, horizontally safe charts, and expandable mobile request rows.
-- **Cache Capacity**: Added `TMDB_CACHE_MAX_ROWS` (default 100,000) across disposable `TmdbCache`, `Movie`, and `TvShow` rows; successful cache writes and sync paths evict old raw responses first, then the oldest normalized rows.
+- **Cache Capacity**: Added `TMDB_CACHE_MAX_ROWS` (default 100,000) across disposable `TmdbCache`, `Movie`, and `TvShow` rows; writes schedule one non-blocking, process-local cleanup at a time, with sequential counts and 1,000-row eviction batches.
 - **Backup-Friendly Cache Clear**: Added a confirmed admin action under **Sync** that clears raw TMDB responses and normalized movie/TV rows while preserving manual mappings, captured/dismissed Search Fixes, and non-cache application data.
 - **Media Storage Separation**: TMDB image paths are stored in database JSON/columns, while image files are cached independently on disk under `data/media`; clearing database cache rows does not clear the bounded media cache.
 

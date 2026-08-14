@@ -5,7 +5,7 @@ import prisma from '@/lib/prisma'
 import { getTvDetails, extractTvDataFull } from '@/lib/tmdb'
 import { checkRequestRateLimit, rateLimitResponse } from '@/lib/ratelimit'
 import { withApiUsage } from '@/lib/api-usage'
-import { enforceCachedDataLimit } from '@/lib/cache-limit'
+import { scheduleCachedDataLimitEnforcement } from '@/lib/cache-limit'
 
 async function getTvShow(
   req: NextRequest,
@@ -39,7 +39,7 @@ async function getTvShow(
       tvShow = await prisma.tvShow.create({
         data: tvData,
       })
-      await enforceCachedDataLimit()
+      scheduleCachedDataLimitEnforcement()
 
       await prisma.syncLog.create({
         data: {

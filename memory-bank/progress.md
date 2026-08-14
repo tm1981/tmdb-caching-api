@@ -56,7 +56,7 @@
   - [x] Non-blocking `/api/v1` logging with sensitive-query redaction and once-daily 30-day retention pruning.
   - [x] Standardized known `x-tmdb-cache` values to `hit`, `miss`, or `bypass`.
   - [x] Reduced large-log dashboard work by reusing hourly status/cache groupings and sampling the newest 5,000 latency rows for P95.
-  - [x] Capped disposable raw/movie/TV cache rows at 100,000 by default with oldest-first eviction and preserved Search Fixes state.
+  - [x] Capped disposable raw/movie/TV cache rows at 100,000 by default with oldest-first eviction and preserved Search Fixes state; enforcement is throttled, single-flight, non-blocking, sequential, and batched to protect the MySQL pool.
   - [x] Documented that TMDB media files are separate from the database and live in the bounded `data/media` disk cache.
  
 ## Known Issues

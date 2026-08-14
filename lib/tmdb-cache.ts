@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { tmdbRawRequest } from '@/lib/tmdb'
 import { retryPrismaUniqueConflict } from '@/lib/prisma-conflict'
-import { enforceCachedDataLimit } from '@/lib/cache-limit'
+import { scheduleCachedDataLimitEnforcement } from '@/lib/cache-limit'
 import {
   isSearchCaptureSourcePath,
   isUnresolvedSearchPayload,
@@ -42,7 +42,7 @@ export async function upsertTmdbCache(data: TmdbCacheWrite) {
       select: { updatedAt: true },
     }),
   )
-  await enforceCachedDataLimit()
+  scheduleCachedDataLimitEnforcement()
   return cached
 }
 

@@ -8,14 +8,31 @@ export const TMDB_CACHE_MAX_ROWS = Number.isInteger(parsedLimit) && parsedLimit 
   : 100_000
 
 const EVICTION_BATCH_SIZE = 1_000
+const ENFORCEMENT_INTERVAL_MS = 60_000
+const OVERFLOW_RETRY_MS = 1_000
+
 export const PRESERVED_TMDB_CACHE_PATHS = [SEARCH_MAPPING_PATH, SEARCH_CAPTURE_PATH]
 
+let enforcementPromise: Promise<void> | null = null
+let retryTimer: ReturnType<typeof setTimeout> | null = null
+let lastEnforcementStartedAt = 0
+let clearInProgress = false
+let clearPromise: Promise<CachedDataClearResult> | null = null
+
+type CachedDataClearResult = {
+  mirror: number
+  movies: number
+  tvShows: number
+  total: number
+}
+
 export async function getCachedDataCounts() {
-  const [mirror, movies, tvShows] = await Promise.all([
-    prisma.tmdbCache.count({ where: { path: { notIn: PRESERVED_TMDB_CACHE_PATHS } } }),
-    prisma.movie.count(),
-    prisma.tvShow.count(),
-  ])
+  // Maintenance queries stay sequential so they never reserve several pool connections at once.
+  const mirror = await prisma.tmdbCache.count({
+    where: { path: { notIn: PRESERVED_TMDB_CACHE_PATHS } },
+  })
+  const movies = await prisma.movie.count()
+  const tvShows = await prisma.tvShow.count()
 
   return {
     mirror,
@@ -34,26 +51,49 @@ async function deleteOldestMirrorRows(count: number) {
   })
 
   if (!rows.length) return 0
-  const result = await prisma.tmdbCache.deleteMany({
+  return (await prisma.tmdbCache.deleteMany({
     where: { id: { in: rows.map(row => row.id) } },
+  })).count
+}
+
+async function deleteOldestMovieRows(count: number) {
+  const rows = await prisma.movie.findMany({
+    orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    take: count,
+    select: { id: true },
   })
-  return result.count
+
+  if (!rows.length) return 0
+  return (await prisma.movie.deleteMany({
+    where: { id: { in: rows.map(row => row.id) } },
+  })).count
+}
+
+async function deleteOldestTvShowRows(count: number) {
+  const rows = await prisma.tvShow.findMany({
+    orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    take: count,
+    select: { id: true },
+  })
+
+  if (!rows.length) return 0
+  return (await prisma.tvShow.deleteMany({
+    where: { id: { in: rows.map(row => row.id) } },
+  })).count
 }
 
 async function deleteOldestNormalizedRows(count: number) {
   const candidateCount = Math.min(count, EVICTION_BATCH_SIZE)
-  const [movies, tvShows] = await Promise.all([
-    prisma.movie.findMany({
-      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
-      take: candidateCount,
-      select: { id: true, updatedAt: true },
-    }),
-    prisma.tvShow.findMany({
-      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
-      take: candidateCount,
-      select: { id: true, updatedAt: true },
-    }),
-  ])
+  const movies = await prisma.movie.findMany({
+    orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    take: candidateCount,
+    select: { id: true, updatedAt: true },
+  })
+  const tvShows = await prisma.tvShow.findMany({
+    orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    take: candidateCount,
+    select: { id: true, updatedAt: true },
+  })
 
   const oldest = [
     ...movies.map(row => ({ ...row, type: 'movie' as const })),
@@ -64,36 +104,102 @@ async function deleteOldestNormalizedRows(count: number) {
 
   const movieIds = oldest.filter(row => row.type === 'movie').map(row => row.id)
   const tvShowIds = oldest.filter(row => row.type === 'tv').map(row => row.id)
-  const [deletedMovies, deletedTvShows] = await prisma.$transaction([
-    prisma.movie.deleteMany({ where: { id: { in: movieIds } } }),
-    prisma.tvShow.deleteMany({ where: { id: { in: tvShowIds } } }),
-  ])
-
-  return deletedMovies.count + deletedTvShows.count
-}
-
-export async function enforceCachedDataLimit() {
-  const counts = await getCachedDataCounts()
-  let overflow = counts.total - TMDB_CACHE_MAX_ROWS
   let deleted = 0
 
-  while (overflow > 0) {
-    const batchSize = Math.min(overflow, EVICTION_BATCH_SIZE)
-    const mirrorDeleted = await deleteOldestMirrorRows(batchSize)
-    deleted += mirrorDeleted
-    overflow -= mirrorDeleted
-
-    if (overflow <= 0) break
-
-    const normalizedDeleted = await deleteOldestNormalizedRows(
-      Math.min(overflow, EVICTION_BATCH_SIZE),
-    )
-    deleted += normalizedDeleted
-    overflow -= normalizedDeleted
-
-    if (mirrorDeleted + normalizedDeleted === 0) break
+  if (movieIds.length) {
+    deleted += (await prisma.movie.deleteMany({ where: { id: { in: movieIds } } })).count
+  }
+  if (tvShowIds.length) {
+    deleted += (await prisma.tvShow.deleteMany({ where: { id: { in: tvShowIds } } })).count
   }
 
-  return { deleted, limit: TMDB_CACHE_MAX_ROWS }
+  return deleted
 }
 
+async function enforceOneBatch() {
+  const counts = await getCachedDataCounts()
+  const overflow = Math.max(0, counts.total - TMDB_CACHE_MAX_ROWS)
+  if (!overflow) return { deleted: 0, remainingOverflow: 0 }
+
+  const batchSize = Math.min(overflow, EVICTION_BATCH_SIZE)
+  const mirrorDeleted = await deleteOldestMirrorRows(batchSize)
+  const normalizedDeleted = mirrorDeleted < batchSize
+    ? await deleteOldestNormalizedRows(batchSize - mirrorDeleted)
+    : 0
+
+  return {
+    deleted: mirrorDeleted + normalizedDeleted,
+    remainingOverflow: Math.max(0, overflow - mirrorDeleted - normalizedDeleted),
+  }
+}
+
+function queueOverflowRetry() {
+  if (retryTimer || clearInProgress) return
+  retryTimer = setTimeout(() => {
+    retryTimer = null
+    scheduleCachedDataLimitEnforcement(true)
+  }, OVERFLOW_RETRY_MS)
+  retryTimer.unref()
+}
+
+export function scheduleCachedDataLimitEnforcement(force = false) {
+  if (clearInProgress || enforcementPromise) return
+
+  const now = Date.now()
+  if (!force && now - lastEnforcementStartedAt < ENFORCEMENT_INTERVAL_MS) return
+  lastEnforcementStartedAt = now
+
+  let remainingOverflow = 0
+  let deleted = 0
+  enforcementPromise = enforceOneBatch()
+    .then(result => {
+      deleted = result.deleted
+      remainingOverflow = result.remainingOverflow
+    })
+    .catch(error => {
+      console.warn('Database cache limit enforcement failed:', error)
+    })
+    .finally(() => {
+      enforcementPromise = null
+      // A zero-progress batch should not create an endless retry loop.
+      // A later cache write will schedule another ordinary check.
+      if (deleted > 0 && remainingOverflow > 0) queueOverflowRetry()
+    })
+}
+
+async function clearTableInBatches(deleteBatch: (count: number) => Promise<number>) {
+  let deleted = 0
+  while (true) {
+    const batchDeleted = await deleteBatch(EVICTION_BATCH_SIZE)
+    deleted += batchDeleted
+    if (batchDeleted < EVICTION_BATCH_SIZE) return deleted
+  }
+}
+
+async function performCachedDataClear(): Promise<CachedDataClearResult> {
+  clearInProgress = true
+  if (retryTimer) {
+    clearTimeout(retryTimer)
+    retryTimer = null
+  }
+
+  try {
+    await enforcementPromise
+    const mirror = await clearTableInBatches(deleteOldestMirrorRows)
+    const movies = await clearTableInBatches(deleteOldestMovieRows)
+    const tvShows = await clearTableInBatches(deleteOldestTvShowRows)
+    lastEnforcementStartedAt = Date.now()
+    return { mirror, movies, tvShows, total: mirror + movies + tvShows }
+  } finally {
+    clearInProgress = false
+  }
+}
+
+export function clearCachedData(): Promise<CachedDataClearResult> {
+  if (clearPromise) return clearPromise
+
+  clearPromise = performCachedDataClear().finally(() => {
+    clearPromise = null
+  })
+  return clearPromise
+}

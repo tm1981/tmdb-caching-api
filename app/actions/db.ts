@@ -10,9 +10,10 @@ import prisma from '@/lib/prisma'
 import { paginationParams } from '@/lib/pagination'
 import { getCachedTmdb, setSearchCaptureDismissed, upsertTmdbCache } from '@/lib/tmdb-cache'
 import {
-  enforceCachedDataLimit,
+  clearCachedData,
   getCachedDataCounts,
   PRESERVED_TMDB_CACHE_PATHS,
+  scheduleCachedDataLimitEnforcement,
   TMDB_CACHE_MAX_ROWS,
 } from '@/lib/cache-limit'
 import {
@@ -538,23 +539,13 @@ export async function getTmdbCacheStats() {
 
 export async function clearCachedTmdbData() {
   await requireAdmin()
-
-  const [mirror, movies, tvShows] = await prisma.$transaction([
-    prisma.tmdbCache.deleteMany({ where: { path: { notIn: PRESERVED_TMDB_CACHE_PATHS } } }),
-    prisma.movie.deleteMany(),
-    prisma.tvShow.deleteMany(),
-  ])
+  const result = await clearCachedData()
 
   revalidatePath('/admin/sync')
   revalidatePath('/admin/movies')
   revalidatePath('/admin/tv')
 
-  return {
-    mirror: mirror.count,
-    movies: movies.count,
-    tvShows: tvShows.count,
-    total: mirror.count + movies.count + tvShows.count,
-  }
+  return result
 }
 
 export async function updateGeoIpDatabase() {
@@ -634,7 +625,7 @@ export async function refreshMovieFromTmdb(tmdbId: number) {
     create: movieData,
     update: movieData,
   })
-  await enforceCachedDataLimit()
+  scheduleCachedDataLimitEnforcement()
   await getCachedTmdb(`/movie/${tmdbId}`, { append_to_response: 'credits,videos', language: 'en-US' }, true)
   revalidatePath(`/admin/movies/${tmdbId}`)
   revalidatePath('/admin/movies')
@@ -650,7 +641,7 @@ export async function refreshTvFromTmdb(tmdbId: number) {
     create: tvData,
     update: tvData,
   })
-  await enforceCachedDataLimit()
+  scheduleCachedDataLimitEnforcement()
   await getCachedTmdb(`/tv/${tmdbId}`, { append_to_response: 'credits,videos', language: 'en-US' }, true)
   revalidatePath(`/admin/tv/${tmdbId}`)
   revalidatePath('/admin/tv')
@@ -690,7 +681,7 @@ export async function syncTrendingMovies() {
     }
   }
 
-  await enforceCachedDataLimit()
+  scheduleCachedDataLimitEnforcement()
 
   await prisma.syncLog.create({
     data: {
@@ -726,7 +717,7 @@ export async function syncTrendingTv() {
     }
   }
 
-  await enforceCachedDataLimit()
+  scheduleCachedDataLimitEnforcement()
 
   await prisma.syncLog.create({
     data: {
@@ -762,7 +753,7 @@ export async function syncTopRatedMovies() {
     }
   }
 
-  await enforceCachedDataLimit()
+  scheduleCachedDataLimitEnforcement()
 
   await prisma.syncLog.create({
     data: {
@@ -798,7 +789,7 @@ export async function syncTopRatedTv() {
     }
   }
 
-  await enforceCachedDataLimit()
+  scheduleCachedDataLimitEnforcement()
 
   await prisma.syncLog.create({
     data: {

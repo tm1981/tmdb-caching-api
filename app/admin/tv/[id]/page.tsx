@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation'
 import prisma from '@/lib/prisma'
 import { getPosterPath, getBackdropPath, getTvDetails, extractTvDataFull } from '@/lib/tmdb'
 import { getTmdbCacheInfo } from '@/lib/tmdb-cache'
-import { enforceCachedDataLimit } from '@/lib/cache-limit'
+import { scheduleCachedDataLimitEnforcement } from '@/lib/cache-limit'
 import { formatRating, formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -44,7 +44,7 @@ async function getTvShow(tmdbId: number) {
       create: tvData,
       update: tvData,
     })
-    await enforceCachedDataLimit()
+    scheduleCachedDataLimitEnforcement()
 
     await prisma.syncLog.create({
       data: {
