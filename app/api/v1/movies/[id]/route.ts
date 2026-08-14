@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma'
 import { getMovieDetails, extractMovieData } from '@/lib/tmdb'
 import { checkRequestRateLimit, rateLimitResponse } from '@/lib/ratelimit'
 import { withApiUsage } from '@/lib/api-usage'
+import { enforceCachedDataLimit } from '@/lib/cache-limit'
 
 async function getMovie(
   req: NextRequest,
@@ -38,6 +39,7 @@ async function getMovie(
       movie = await prisma.movie.create({
         data: movieData,
       })
+      await enforceCachedDataLimit()
 
       await prisma.syncLog.create({
         data: {

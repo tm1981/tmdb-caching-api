@@ -4,6 +4,8 @@
 - **Framework**: Next.js 16 (App Router, Turbopack)
 - **Language**: TypeScript
 - **Database**: PostgreSQL, MySQL, or MariaDB (Prisma ORM with provider-aware adapter)
+- **Cache Capacity**: Application-level 100,000-row default across disposable raw TMDB, movie, and TV cache records; configurable with `TMDB_CACHE_MAX_ROWS` and requiring no schema migration.
+- **Media Cache Separation**: TMDB image files use the independent bounded `data/media` filesystem cache and are not database rows.
 - **Styling**: Tailwind CSS 4
 - **UI Library**: Shadcn/UI (Radix Primitives)
 - **Icons**: Lucide React

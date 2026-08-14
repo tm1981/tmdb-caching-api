@@ -44,6 +44,7 @@
   - [x] Lazy-sync on API requests.
   - [x] Manual bulk sync from admin dashboard.
   - [x] TMDB mirror cache stats and paginated warmup controls on the sync page.
+  - [x] Combined cache-cap stats and confirmed database-cache clearing on the sync page.
 - [x] **Deployment**:
   - [x] Normal `next start` deployment configured for PM2/nginx.
   - [x] PostgreSQL migrations are tracked; MySQL/MariaDB deployment uses `prisma db push` unless a separate provider-specific migration history is created.
@@ -55,6 +56,8 @@
   - [x] Non-blocking `/api/v1` logging with sensitive-query redaction and once-daily 30-day retention pruning.
   - [x] Standardized known `x-tmdb-cache` values to `hit`, `miss`, or `bypass`.
   - [x] Reduced large-log dashboard work by reusing hourly status/cache groupings and sampling the newest 5,000 latency rows for P95.
+  - [x] Capped disposable raw/movie/TV cache rows at 100,000 by default with oldest-first eviction and preserved Search Fixes state.
+  - [x] Documented that TMDB media files are separate from the database and live in the bounded `data/media` disk cache.
  
 ## Known Issues
 - None currently.

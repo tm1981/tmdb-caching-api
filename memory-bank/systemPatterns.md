@@ -26,6 +26,9 @@ The application is built on **Next.js 16 (App Router)** using React Server Compo
 - **Lazy Sync**: API routes check DB first. If not found, fetch from TMDB, cache, and return.
 - **TMDB Mirror Cache**: `/api/v1/tmdb/[...path]` mirrors public TMDB content GET endpoints and caches successful raw JSON responses in `TmdbCache`.
 - **TMDB Media Cache**: `/media/t/p/{size}/{path}` lazily stores image CDN responses in `data/media`; the mirrored `/configuration` response substitutes only its existing image base URL values, leaving all content payload structures and relative paths unchanged.
+- **Cache Capacity**: Disposable rows across `TmdbCache` (excluding `/search/manual` and `/search/captured`), `Movie`, and `TvShow` are capped by `TMDB_CACHE_MAX_ROWS` (default 100,000). Writes evict the oldest raw responses first and then the oldest normalized rows in bounded batches.
+- **Cache Clearing**: The authenticated Sync-page action removes disposable raw/movie/TV cache data for lean backups while preserving manual mappings, search captures, accounts, API keys, request logs, and sync history.
+- **Separate Media Storage**: Database rows store TMDB image path strings, while requested posters, backdrops, profiles, logos, and still images are cached independently under `data/media`; database-cache cleanup does not remove disk media files.
 - **Manual Search Mapping**: Empty cached title searches are surfaced to admins; mappings reuse `TmdbCache` under `/search/manual` and are applied at response time without changing the raw upstream cache entry.
 - **Search Capture Markers**: Unresolved searches reuse `TmdbCache` under `/search/captured`; dismissed markers suppress known no-match queries while leaving raw upstream cache entries intact.
 - **Rate Limiting**: In-memory sliding window (60 req/min per API key).

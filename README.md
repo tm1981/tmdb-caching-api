@@ -167,8 +167,13 @@ After login, the admin dashboard provides:
 - **Sync** - Trigger bulk syncs (trending movies/TV, top rated)
 - **API Keys** - Create, manage, and revoke API keys
 - **Usage & Logs** - Inspect API traffic, active clients, cache performance, latency, countries, and individual requests; admins can permanently clear request logs after confirmation
+- **Cache controls** - Cap disposable TMDB cache rows and clear cached responses, movies, and TV shows before a backup while preserving account data and Search Fixes state
 
 The admin-only `/admin/usage` page records `/api/v1` attempts for 30 days. Sensitive query values are redacted, and raw API keys are never stored. The dashboard reuses hourly aggregates and calculates P95 latency from the latest 5,000 requests in each comparison window so large log tables remain responsive. **Clear logs** permanently truncates the request-log table for the configured database after browser confirmation.
+
+Disposable database cache rows are capped by `TMDB_CACHE_MAX_ROWS` (default `100000`) across `TmdbCache`, `Movie`, and `TvShow`. Old raw mirror rows are evicted first, followed by the oldest normalized movie/TV rows. Manual corrections and captured/dismissed Search Fixes are preserved and do not count toward the limit. **Admin > Sync > Clear database cache** removes disposable cached rows without deleting users, API keys, request logs, sync history, or Search Fixes state.
+
+TMDB media files are not stored in the database. The database keeps TMDB image path strings, while the media proxy stores requested files separately on disk under `data/media` with its own `MEDIA_CACHE_MAX_BYTES` limit. Clearing the database cache does not clear this disk media cache; omit `data/media` from a lean backup or clear that directory separately while the app is stopped.
 
 IP and country values come from trusted reverse-proxy headers, so nginx or your CDN must overwrite forwarded headers at the network boundary. When no country header is present, the logger can fall back to a local MaxMind GeoLite2 Country database.
 

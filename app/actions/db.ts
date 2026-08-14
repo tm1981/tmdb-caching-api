@@ -10,6 +10,12 @@ import prisma from '@/lib/prisma'
 import { paginationParams } from '@/lib/pagination'
 import { getCachedTmdb, setSearchCaptureDismissed, upsertTmdbCache } from '@/lib/tmdb-cache'
 import {
+  enforceCachedDataLimit,
+  getCachedDataCounts,
+  PRESERVED_TMDB_CACHE_PATHS,
+  TMDB_CACHE_MAX_ROWS,
+} from '@/lib/cache-limit'
+import {
   isUnresolvedSearchPayload,
   manualSearchCacheKey,
   manualSearchCacheQuery,
@@ -497,14 +503,16 @@ export async function getSyncLogs(limit = 50) {
 
 export async function getTmdbCacheStats() {
   await requireAdmin()
-  const [total, latest, recent] = await Promise.all([
-    prisma.tmdbCache.count(),
+  const [counts, latest, recent] = await Promise.all([
+    getCachedDataCounts(),
     prisma.tmdbCache.findFirst({
+      where: { path: { notIn: PRESERVED_TMDB_CACHE_PATHS } },
       orderBy: { updatedAt: 'desc' },
       select: { updatedAt: true },
     }),
     // ponytail: sample recent rows; use SQL grouping if the cache grows large.
     prisma.tmdbCache.findMany({
+      where: { path: { notIn: PRESERVED_TMDB_CACHE_PATHS } },
       take: 1000,
       orderBy: { updatedAt: 'desc' },
       select: { path: true },
@@ -518,12 +526,34 @@ export async function getTmdbCacheStats() {
   }
 
   return {
-    total,
+    ...counts,
+    limit: TMDB_CACHE_MAX_ROWS,
     lastUpdatedAt: latest?.updatedAt ?? null,
     topRoots: [...roots.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
       .map(([path, count]) => ({ path: `/${path}`, count })),
+  }
+}
+
+export async function clearCachedTmdbData() {
+  await requireAdmin()
+
+  const [mirror, movies, tvShows] = await prisma.$transaction([
+    prisma.tmdbCache.deleteMany({ where: { path: { notIn: PRESERVED_TMDB_CACHE_PATHS } } }),
+    prisma.movie.deleteMany(),
+    prisma.tvShow.deleteMany(),
+  ])
+
+  revalidatePath('/admin/sync')
+  revalidatePath('/admin/movies')
+  revalidatePath('/admin/tv')
+
+  return {
+    mirror: mirror.count,
+    movies: movies.count,
+    tvShows: tvShows.count,
+    total: mirror.count + movies.count + tvShows.count,
   }
 }
 
@@ -604,6 +634,7 @@ export async function refreshMovieFromTmdb(tmdbId: number) {
     create: movieData,
     update: movieData,
   })
+  await enforceCachedDataLimit()
   await getCachedTmdb(`/movie/${tmdbId}`, { append_to_response: 'credits,videos', language: 'en-US' }, true)
   revalidatePath(`/admin/movies/${tmdbId}`)
   revalidatePath('/admin/movies')
@@ -619,6 +650,7 @@ export async function refreshTvFromTmdb(tmdbId: number) {
     create: tvData,
     update: tvData,
   })
+  await enforceCachedDataLimit()
   await getCachedTmdb(`/tv/${tmdbId}`, { append_to_response: 'credits,videos', language: 'en-US' }, true)
   revalidatePath(`/admin/tv/${tmdbId}`)
   revalidatePath('/admin/tv')
@@ -658,6 +690,8 @@ export async function syncTrendingMovies() {
     }
   }
 
+  await enforceCachedDataLimit()
+
   await prisma.syncLog.create({
     data: {
       type: 'bulk',
@@ -691,6 +725,8 @@ export async function syncTrendingTv() {
       errors++
     }
   }
+
+  await enforceCachedDataLimit()
 
   await prisma.syncLog.create({
     data: {
@@ -726,6 +762,8 @@ export async function syncTopRatedMovies() {
     }
   }
 
+  await enforceCachedDataLimit()
+
   await prisma.syncLog.create({
     data: {
       type: 'bulk',
@@ -759,6 +797,8 @@ export async function syncTopRatedTv() {
       errors++
     }
   }
+
+  await enforceCachedDataLimit()
 
   await prisma.syncLog.create({
     data: {

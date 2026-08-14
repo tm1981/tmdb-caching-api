@@ -18,7 +18,11 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Database, Film, Tv } from 'lucide-react'
 import { getSyncLogs, getTmdbCacheStats } from '@/app/actions/db'
-import { CacheWarmupButtons, SyncButtons } from '@/components/admin/sync-buttons'
+import {
+  CacheWarmupButtons,
+  ClearCachedDataButton,
+  SyncButtons,
+} from '@/components/admin/sync-buttons'
 
 export default async function SyncPage() {
   const [logs, cacheStats] = await Promise.all([
@@ -37,10 +41,14 @@ export default async function SyncPage() {
               <Database className="size-5" />
               Mirror Cache
             </CardTitle>
-            <CardDescription>Total cached TMDB responses</CardDescription>
+            <CardDescription>
+              {cacheStats.total.toLocaleString()} of {cacheStats.limit.toLocaleString()} cached database rows
+            </CardDescription>
           </CardHeader>
-          <CardContent className="text-3xl font-semibold">
-            {cacheStats.total}
+          <CardContent className="flex flex-wrap gap-2">
+            <Badge variant="secondary">Mirror {cacheStats.mirror.toLocaleString()}</Badge>
+            <Badge variant="secondary">Movies {cacheStats.movies.toLocaleString()}</Badge>
+            <Badge variant="secondary">TV {cacheStats.tvShows.toLocaleString()}</Badge>
           </CardContent>
         </Card>
 
@@ -84,6 +92,19 @@ export default async function SyncPage() {
         </CardHeader>
         <CardContent>
           <CacheWarmupButtons />
+        </CardContent>
+      </Card>
+
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Database Cache</CardTitle>
+          <CardDescription>
+            Cached TMDB data is capped at {cacheStats.limit.toLocaleString()} rows. Clear it before
+            a backup when cached content does not need to be included.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ClearCachedDataButton />
         </CardContent>
       </Card>
 
