@@ -36,6 +36,7 @@ The application is built on **Next.js 16 (App Router)** using React Server Compo
 - **Trusted Rate-Limit Bypass**: Comma-separated exact IPs can bypass the local per-IP limit; API authentication and blocked-IP enforcement still run. Local and upstream 429 responses are distinguished by `x-ratelimit-source`.
 - **Request Logging**: `proxy.ts` logs proxy-generated failures and shared route wrappers log final handler responses through Next.js `after()` so analytics does not delay responses.
 - **Rate-Limit Attribution**: Request logs persist `tmdb` versus `tmdb-service`; lazy movie/TV cache misses preserve upstream TMDB 429 responses and retry timing instead of converting them to generic 502 responses.
+- **MySQL Schema Updates**: Existing deployments with legacy `LONGTEXT` TMDB payloads use targeted SQL patches for additive changes so `prisma db push` cannot rewrite the populated cache table as native JSON.
 - **Usage Retention**: Exact request logs are retained for 30 days and pruned once daily from the background write path; admins can also clear the table manually through a confirmed provider-native truncate action.
 - **Large-Log Analytics**: Current totals reuse hourly status/cache groupings, while P95 latency is calculated from the latest 5,000 requests in each comparison window instead of sorting the full range.
 - **API Key Auth**: Middleware validates `x-api-key` against the database. Keys have no per-key request limit; middleware retains a 120 requests-per-minute per-IP abuse guard.

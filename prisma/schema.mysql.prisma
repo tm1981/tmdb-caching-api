@@ -35,7 +35,7 @@ model ApiRequestLog {
   apiKeyPrefix    String   @default("")
   method          String   @default("GET")
   endpoint        String   @db.VarChar(512)
-  query           String   @default("") @db.Text
+  query           String   @db.Text
   status          Int
   durationMs      Int
   ipAddress       String   @db.VarChar(45)

@@ -137,6 +137,15 @@ npm run build
 pm2 restart tmdb
 ```
 
+If an existing deployment stores `TmdbCache.payload` as `LONGTEXT`, do not accept a `db push` conversion of
+that populated cache column to native `JSON`. Apply the source-aware rate-limit log update directly instead:
+
+```bash
+npx prisma db execute --file prisma/mysql/20260815120000_add_rate_limit_source.sql
+```
+
+The targeted statement only adds the nullable `ApiRequestLog.rateLimitSource` column and its index.
+
 Use `DATABASE_PROVIDER=mariadb` for MariaDB if your `.env` uses that provider.
 
 To use real MySQL/MariaDB migrations later, create a separate MySQL/MariaDB migration history from `prisma/schema.mysql.prisma` on a clean database, then commit that provider-specific migration set. Do not mix it with the PostgreSQL migration folder.

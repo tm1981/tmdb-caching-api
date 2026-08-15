@@ -23,6 +23,7 @@
   - [x] API key validation via middleware.
   - [x] Removed per-key request throttling while retaining the 120 req/min per-IP API abuse guard.
   - [x] Persist and display upstream TMDB rate limits separately from the app's IP guard.
+  - [x] Added a targeted MySQL rate-limit-source schema patch that avoids rewriting legacy `LONGTEXT` cache payloads.
 - [x] **Admin Dashboard**:
   - [x] Movies table with search, pagination, posters, ratings.
   - [x] TV shows table with search, pagination, posters, ratings.
