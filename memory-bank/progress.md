@@ -21,9 +21,9 @@
   - [x] Combined movie/TV search.
   - [x] TMDB-compatible raw content mirror at `/api/v1/tmdb/[...path]`.
   - [x] API key validation via middleware.
-  - [x] Removed per-key request throttling while retaining the 120 req/min per-IP API abuse guard.
+  - [x] Removed all application-side per-key and per-IP request throttling.
   - [x] Persist and display upstream TMDB rate limits separately from the app's IP guard.
-  - [x] Added a targeted MySQL rate-limit-source schema patch that avoids rewriting legacy `LONGTEXT` cache payloads.
+  - [x] Added a separate MySQL migration history and one-time transition preserving only `User` and `ApiKey`.
 - [x] **Admin Dashboard**:
   - [x] Movies table with search, pagination, posters, ratings.
   - [x] TV shows table with search, pagination, posters, ratings.

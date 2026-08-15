@@ -97,7 +97,7 @@ export function normalizedCacheStatus(value: string | null) {
 }
 
 export function normalizedRateLimitSource(value: string | null) {
-  return value === 'tmdb' || value === 'tmdb-service' ? value : null
+  return value === 'tmdb' ? value : null
 }
 
 export function polylinePoints(values: number[], width: number, height: number) {

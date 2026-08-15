@@ -17,6 +17,12 @@ export function getPrismaSchema() {
     : './prisma/schema.mysql.prisma'
 }
 
+export function getPrismaMigrationsPath() {
+  return getDatabaseProvider() === 'postgresql'
+    ? './prisma/migrations'
+    : './prisma/migrations-mysql'
+}
+
 export function createPrismaAdapter() {
   const url = process.env.DATABASE_URL
   if (!url) throw new Error('DATABASE_URL is required')

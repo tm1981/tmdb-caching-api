@@ -51,7 +51,6 @@ This is a list of the core application files, excluding configuration files and 
 - `lib/tmdb.ts`: TMDB API client with functions for search, details, trending, top-rated.
 - `lib/media-cache.ts`: TMDB image validation, fetch coalescing, atomic disk writes, configuration base URL substitution, and bounded cache trimming.
 - `lib/search-mappings.ts`: Query normalization, mapping validation, and mapped-result insertion helpers.
-- `lib/ratelimit.ts`: In-memory rate limiter with sliding window cleanup.
 - `lib/api-usage.ts`: Shared `after()` request logging, API-key snapshots, and retention cleanup.
 - `lib/geoip.ts`: Lazy watched GeoLite2 Country reader used when proxy country metadata is absent.
 - `lib/usage-dashboard.ts`: Prisma aggregations, comparisons, filters, bounded P95 latency sampling, and pagination.

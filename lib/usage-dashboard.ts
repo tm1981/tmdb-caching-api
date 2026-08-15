@@ -76,13 +76,11 @@ function statusCount(rows: StatusRow[], predicate: (status: number) => boolean) 
   )
 }
 
-function rateLimitCount(rows: RateLimitRow[], source?: 'tmdb' | 'tmdb-service') {
-  return rows.reduce((total, row) => {
-    const matches = source
-      ? row.rateLimitSource === source
-      : row.status === 429 || row.rateLimitSource !== null
-    return total + (matches ? row._count._all : 0)
-  }, 0)
+function rateLimitCount(rows: RateLimitRow[]) {
+  return rows.reduce(
+    (total, row) => total + (row.rateLimitSource === 'tmdb' ? row._count._all : 0),
+    0,
+  )
 }
 
 function cacheCount(rows: CacheRow[], value: string) {
@@ -342,10 +340,6 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
   const previousMisses = cacheCount(previousCaches, 'miss')
   const rateLimited = rateLimitCount(currentStatuses)
   const previousRateLimited = rateLimitCount(previousStatuses as RateLimitRow[])
-  const tmdbRateLimited = rateLimitCount(currentStatuses, 'tmdb')
-  const previousTmdbRateLimited = rateLimitCount(previousStatuses as RateLimitRow[], 'tmdb')
-  const localRateLimited = rateLimitCount(currentStatuses, 'tmdb-service')
-  const previousLocalRateLimited = rateLimitCount(previousStatuses as RateLimitRow[], 'tmdb-service')
   const successRate = percentage(successful, total)
   const previousSuccessRate = percentage(previousSuccessful, previousTotal)
   const cacheHitRate = percentage(hits, hits + misses)
@@ -475,14 +469,6 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
       },
       p95Latency: { value: p95Latency, change: percentChange(p95Latency, previousP95Latency) },
       rateLimited: { value: rateLimited, change: percentChange(rateLimited, previousRateLimited) },
-      tmdbRateLimited: {
-        value: tmdbRateLimited,
-        change: percentChange(tmdbRateLimited, previousTmdbRateLimited),
-      },
-      localRateLimited: {
-        value: localRateLimited,
-        change: percentChange(localRateLimited, previousLocalRateLimited),
-      },
     },
     requestsOverTime: series.requests.map((value, index) => ({
       value,

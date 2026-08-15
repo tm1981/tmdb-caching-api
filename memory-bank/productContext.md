@@ -17,11 +17,11 @@ A decoupled caching system consisting of:
   - **API Keys**: Create, copy, toggle, and delete API keys for accessing the service.
   - **Sync**: Manual bulk sync buttons for trending/top-rated content with sync logs.
   - **Usage & Logs**: Range comparisons, API activity charts, operational breakdowns, filters, pagination, and responsive request details.
-- **Public API**: JSON responses with pagination, lazy-sync, and per-IP abuse protection.
+- **Public API**: JSON responses with pagination, lazy-sync, and API-key authentication.
 
 ## Constraints
 - **API Key Required**: All public API endpoints require an `x-api-key` header.
-- **Rate Limiting**: API keys have no individual request limit; clients remain subject to a 120 requests-per-minute per-IP abuse guard.
+- **Rate Limiting**: The app applies no per-key or per-IP request limit; outbound requests remain subject to TMDB's upstream limits.
 - **TMDB API Limits**: Outbound calls to TMDB are subject to their rate limits.
 - **Lazy Sync**: When data isn't cached, the service fetches from TMDB, caches it, and returns it (may be slower on first request).
 - **Admin Authentication**: next-auth Credentials Provider with bcrypt password hashing.

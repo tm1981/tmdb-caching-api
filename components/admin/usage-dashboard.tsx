@@ -345,14 +345,8 @@ function Operations({ data }: { data: UsageDashboardData }) {
         <div className="mt-1"><Trend value={data.metrics.p95Latency.change} invert /></div>
       </div>
       <div className="border-t pt-4 sm:border-l sm:border-t-0 sm:pl-4 md:border-l-0 md:border-t md:pl-0">
-        <p className="text-xs text-muted-foreground">Rate limited</p>
+        <p className="text-xs text-muted-foreground">TMDB rate limits</p>
         <p className="mt-1 text-2xl font-semibold tracking-tight">{wholeNumber.format(data.metrics.rateLimited.value)}</p>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <Badge variant={data.metrics.tmdbRateLimited.value ? 'destructive' : 'outline'}>
-            TMDB {wholeNumber.format(data.metrics.tmdbRateLimited.value)}
-          </Badge>
-          <Badge variant="outline">App IP guard {wholeNumber.format(data.metrics.localRateLimited.value)}</Badge>
-        </div>
         <div className="mt-1"><Trend value={data.metrics.rateLimited.change} invert /></div>
       </div>
     </div>
@@ -395,24 +389,16 @@ function MobileAnalytics({ data }: { data: UsageDashboardData }) {
       ),
     },
     {
-      label: 'Rate limited',
+      label: 'TMDB rate limits',
       value: wholeNumber.format(data.metrics.rateLimited.value),
       icon: ShieldAlert,
       content: (
         <div className="space-y-3">
           <OperationMetric
-            label="Rate-limit events in this range"
+            label="Upstream TMDB rate-limit events"
             value={wholeNumber.format(data.metrics.rateLimited.value)}
             change={data.metrics.rateLimited.change}
           />
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={data.metrics.tmdbRateLimited.value ? 'destructive' : 'outline'}>
-              TMDB upstream {wholeNumber.format(data.metrics.tmdbRateLimited.value)}
-            </Badge>
-            <Badge variant="outline">
-              App IP guard {wholeNumber.format(data.metrics.localRateLimited.value)}
-            </Badge>
-          </div>
         </div>
       ),
     },
@@ -446,7 +432,6 @@ function cacheBadge(cacheStatus: string | null) {
 
 function rateLimitBadge(source: string | null) {
   if (source === 'tmdb') return <Badge variant="destructive">TMDB LIMIT</Badge>
-  if (source === 'tmdb-service') return <Badge variant="outline">APP LIMIT</Badge>
   return null
 }
 

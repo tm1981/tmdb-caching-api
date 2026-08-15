@@ -11,27 +11,8 @@ All public endpoints require:
 x-api-key: your_api_key
 ```
 
-API keys do not have individual request limits. The service applies a 120 requests-per-minute IP guard before
-authentication to protect all `/api/v1/*` routes. Exact trusted server IPs listed in `RATE_LIMIT_BYPASS_IPS`
-bypass this local IP limit, but still require a valid API key and remain subject to blocked-IP rules. Forwarded IP headers must be
-overwritten by the trusted nginx/CDN boundary.
-
-Local rate-limit responses are identifiable without parsing the message:
-
-```http
-HTTP/1.1 429 Too Many Requests
-Retry-After: 42
-X-RateLimit-Source: tmdb-service
-```
-
-```json
-{
-  "error": "Rate limit exceeded. Try again later.",
-  "code": "RATE_LIMITED",
-  "source": "tmdb-service",
-  "retry_after": 42
-}
-```
+The app applies no per-key or per-IP request limit. Requests still require a valid active key and remain subject
+to manually blocked-IP rules. Forwarded IP headers must be overwritten by the trusted nginx/CDN boundary.
 
 If the upstream TMDB API returns 429, mirror endpoints preserve TMDB's response body and status and add:
 
@@ -42,7 +23,7 @@ X-TMDB-Cache: bypass
 ```
 
 Clients should branch on status `429`, inspect `X-RateLimit-Source`, and wait for `Retry-After` seconds before retrying.
-The Usage dashboard persists this source and reports TMDB upstream throttling separately from the app's IP guard.
+The Usage dashboard persists this source and reports TMDB upstream throttling.
 
 ## TMDB Mirror
 

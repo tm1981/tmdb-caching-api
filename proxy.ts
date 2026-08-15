@@ -4,7 +4,6 @@ import { getToken } from 'next-auth/jwt'
 import { PrismaClient } from '@prisma/client'
 import { hashApiKey } from '@/lib/api-keys'
 import { createPrismaAdapter } from '@/lib/database-provider'
-import { checkRequestRateLimit, rateLimitResponse } from '@/lib/ratelimit'
 import { queueProxyUsage, usageRequestHeaders } from '@/lib/api-usage'
 import { validIpAddress } from '@/lib/ip-address'
 import { clientIp } from '@/lib/usage'
@@ -57,12 +56,6 @@ export async function proxy(request: NextRequest) {
       }
     } catch {
       return NextResponse.json({ error: 'Database error.' }, { status: 500 })
-    }
-
-    const ipLimit = checkRequestRateLimit(request.headers, `api-auth:${ipAddress || 'unknown'}`, 120)
-    if (!ipLimit.allowed) {
-      queueProxyUsage(request, 429, startedAt, null, 'tmdb-service')
-      return rateLimitResponse(ipLimit)
     }
 
     const apiKey = request.headers.get('x-api-key')

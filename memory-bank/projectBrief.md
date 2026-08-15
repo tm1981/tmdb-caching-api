@@ -8,7 +8,7 @@ TMDB Service is a web application and REST API designed to cache, serve, and man
 - **Usage Dashboard**: Monitor API requests, clients, cache performance, latency, countries, statuses, and API keys without exposing analytics publicly.
 - **API Key Management**: Create, revoke, and manage API keys for accessing the service.
 - **Manual Sync**: Bulk sync trending and top-rated content from TMDB.
-- **Rate Limiting**: Per-IP abuse protection (120 req/min); authenticated API keys have no individual request limit.
+- **Rate Limiting**: No application-side request throttling; upstream TMDB limits are surfaced in usage logs.
 
 ## Goals
 - Provide a fast, cached layer between consumers and the TMDB API.

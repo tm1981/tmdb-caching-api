@@ -55,7 +55,6 @@ NEXTAUTH_URL=http://localhost:3000
 MEDIA_PUBLIC_URL=http://localhost:3000
 MEDIA_CACHE_MAX_BYTES=5368709120
 MEDIA_CACHE_MAX_FILE_BYTES=26214400
-RATE_LIMIT_BYPASS_IPS="203.0.113.10,2001:db8::1"
 ADMIN_USERNAME=admin@example.com
 ADMIN_PASSWORD=your_secure_password
 SMTP_HOST=smtp.example.com
@@ -102,11 +101,11 @@ npm run db:seed
 
 Prisma migration SQL is provider-specific. Do not run PostgreSQL migrations against MySQL/MariaDB, or MySQL migrations against PostgreSQL.
 
-This repository currently has PostgreSQL migration files in `prisma/migrations/`:
+This repository keeps provider-specific migration histories:
 
-```bash
-cat prisma/migrations/migration_lock.toml
-# provider = "postgresql"
+```text
+prisma/migrations/        # PostgreSQL
+prisma/migrations-mysql/  # MySQL and MariaDB
 ```
 
 ### PostgreSQL production
@@ -129,26 +128,17 @@ Commit the generated `prisma/migrations/*` files.
 
 ### MySQL / MariaDB production
 
-The checked-in migrations are not MySQL-compatible. For the current MySQL/MariaDB install, use:
-
 ```bash
-DATABASE_PROVIDER=mysql npx prisma db push
+DATABASE_PROVIDER=mysql npm run db:migrate:deploy
 npm run build
 pm2 restart tmdb
 ```
 
-If an existing deployment stores `TmdbCache.payload` as `LONGTEXT`, do not accept a `db push` conversion of
-that populated cache column to native `JSON`. Apply the source-aware rate-limit log update directly instead:
-
-```bash
-npx prisma db execute --file prisma/mysql/20260815120000_add_rate_limit_source.sql
-```
-
-The targeted statement only adds the nullable `ApiRequestLog.rateLimitSource` column and its index.
-
 Use `DATABASE_PROVIDER=mariadb` for MariaDB if your `.env` uses that provider.
 
-To use real MySQL/MariaDB migrations later, create a separate MySQL/MariaDB migration history from `prisma/schema.mysql.prisma` on a clean database, then commit that provider-specific migration set. Do not mix it with the PostgreSQL migration folder.
+Existing pre-migration MySQL installations must complete the one-time reset in
+[`docs/mysql-migration-transition.md`](docs/mysql-migration-transition.md). It preserves `User` and `ApiKey`,
+rebuilds disposable data, and establishes the MySQL migration history. Do not use `db push` in production.
 
 ### 5. Run the development server
 
@@ -178,17 +168,13 @@ After login, the admin dashboard provides:
 - **Usage & Logs** - Inspect API traffic, active clients, cache performance, latency, countries, and individual requests; admins can permanently clear request logs after confirmation
 - **Cache controls** - Cap disposable TMDB cache rows and clear cached responses, movies, and TV shows before a backup while preserving account data and Search Fixes state
 
-The admin-only `/admin/usage` page records `/api/v1` attempts for 30 days. Sensitive query values are redacted, and raw API keys are never stored. Rate-limit events identify their source so upstream TMDB API-key throttling is shown separately from the app's per-IP guard in both the operational summary and recent-request rows. Expensive chart and metric aggregates use a process-local, single-flight cache: values stay fresh for one minute, stale values render immediately while refreshing in the background, and the default 24-hour view is warmed after an authenticated admin page renders. The visible request table and its filters remain live. P95 latency uses the latest 5,000 requests in each comparison window. **Clear logs** permanently truncates the request-log table after browser confirmation and invalidates the aggregate cache.
+The admin-only `/admin/usage` page records `/api/v1` attempts for 30 days. Sensitive query values are redacted, and raw API keys are never stored. Upstream TMDB API-key throttling is identified in the operational summary and recent-request rows. Expensive chart and metric aggregates use a process-local, single-flight cache: values stay fresh for one minute, stale values render immediately while refreshing in the background, and the default 24-hour view is warmed after an authenticated admin page renders. The visible request table and its filters remain live. P95 latency uses the latest 5,000 requests in each comparison window. **Clear logs** permanently truncates the request-log table after browser confirmation and invalidates the aggregate cache.
 
 Disposable database cache rows are capped by `TMDB_CACHE_MAX_ROWS` (default `100000`) across `TmdbCache`, `Movie`, and `TvShow`. Old raw mirror rows are evicted first, followed by the oldest normalized movie/TV rows. Cleanup is single-flight, runs outside the request path, and uses sequential 1,000-row batches so normal traffic cannot start overlapping cleanup transactions and exhaust a small MySQL connection pool. Manual corrections and captured/dismissed Search Fixes are preserved and do not count toward the limit. **Admin > Sync > Clear database cache** removes disposable cached rows in the same bounded batches without deleting users, API keys, request logs, sync history, or Search Fixes state.
 
 TMDB media files are not stored in the database. The database keeps TMDB image path strings, while the media proxy stores requested files separately on disk under `data/media` with its own `MEDIA_CACHE_MAX_BYTES` limit. The proxy tracks cache growth in memory, scans files with bounded concurrency only when needed, and trims to 90% of the limit so a full directory scan is not repeated after every new image. Clearing the database cache does not clear this disk media cache; omit `data/media` from a lean backup or clear that directory separately while the app is stopped.
 
 IP and country values come from trusted reverse-proxy headers, so nginx or your CDN must overwrite forwarded headers at the network boundary. When no country header is present, the logger can fall back to a local MaxMind GeoLite2 Country database.
-
-`RATE_LIMIT_BYPASS_IPS` accepts a comma-separated list of exact trusted client IPs. These IPs bypass the local
-per-IP request limit, but not API-key authentication or blocked-IP checks. A local 429 response uses
-`x-ratelimit-source: tmdb-service`; an upstream TMDB 429 uses `x-ratelimit-source: tmdb`. Both include `retry-after`.
 
 ### GeoIP country fallback
 
@@ -198,8 +184,8 @@ The downloaded MMDB is ignored by Git. The application watches it for updates, a
 
 ## API Endpoints
 
-All API endpoints require the `x-api-key` header. API keys do not have individual request limits; a separate
-120 requests-per-minute per-IP guard protects API authentication and all `/api/v1/*` routes.
+All API endpoints require the `x-api-key` header. The app applies no per-key or per-IP request limit. Outbound
+requests remain subject to TMDB's upstream limits, which are reported with `x-ratelimit-source: tmdb`.
 
 For TMDB-compatible content mirroring, use `/api/v1/tmdb/{tmdb_path}`. It forwards public TMDB content GET endpoints, caches successful JSON responses, and keeps TMDB's response shape. See [docs/api.md](docs/api.md).
 

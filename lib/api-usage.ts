@@ -122,9 +122,8 @@ export function queueProxyUsage(
   status: number,
   startedAt: number,
   key: ApiKeySnapshot | null = null,
-  rateLimitSource: string | null = null,
 ) {
-  queueUsage(usageWrite(request, status, performance.now() - startedAt, null, rateLimitSource, key))
+  queueUsage(usageWrite(request, status, performance.now() - startedAt, null, null, key))
 }
 
 export function withApiUsage<Context>(
