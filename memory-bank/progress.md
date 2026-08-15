@@ -59,6 +59,7 @@
   - [x] Capped disposable raw/movie/TV cache rows at 100,000 by default with oldest-first eviction and preserved Search Fixes state; enforcement is throttled, single-flight, non-blocking, sequential, and batched to protect the MySQL pool.
   - [x] Documented that TMDB media files are separate from the database and live in the bounded `data/media` disk cache.
   - [x] Prevented media-cache saturation from monopolizing Node CPU and memory by replacing per-miss 80K-file promise floods with tracked size, bounded scans, trim hysteresis, and an emergency overage guard.
+  - [x] Kept the 401K-row usage dashboard responsive with post-response 24-hour warmup, one-minute single-flight stale-while-refresh aggregates, live log pagination, and an immediate loading skeleton.
  
 ## Known Issues
 - None currently.

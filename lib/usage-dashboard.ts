@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client'
 import { requireAdmin } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { createStaleWhileRevalidateCache } from '@/lib/stale-cache'
 import {
   countryName,
   parseUsageRange,
@@ -16,6 +17,7 @@ import {
 const HOUR_MS = 60 * 60 * 1000
 const PAGE_SIZE = 25
 const LATENCY_SAMPLE_SIZE = 5000
+const AGGREGATE_FRESH_MS = 60 * 1000
 
 type DashboardInput = {
   range?: string
@@ -33,6 +35,20 @@ type HourlyCacheRow = CacheRow & { hourBucket: Date }
 type HourlyClientRow = { hourBucket: Date; apiKeyId: number | null; ipAddress: string }
 type TopIpRow = CountRow & { ipAddress: string; _avg: { durationMs: number | null } }
 type IpBreakdownRow = StatusRow & { ipAddress: string; cacheStatus: string | null }
+
+type UsageAggregateData = Awaited<ReturnType<typeof loadUsageAggregates>>
+type UsageAggregateCache = ReturnType<
+  typeof createStaleWhileRevalidateCache<UsageRange, UsageAggregateData>
+>
+const globalForUsageDashboard = globalThis as unknown as {
+  usageAggregateCache: UsageAggregateCache | undefined
+}
+const usageAggregateCache = globalForUsageDashboard.usageAggregateCache
+  ?? createStaleWhileRevalidateCache<UsageRange, UsageAggregateData>({
+    freshMs: AGGREGATE_FRESH_MS,
+    onRefreshError: error => console.warn('Usage dashboard aggregate refresh failed:', error),
+  })
+globalForUsageDashboard.usageAggregateCache = usageAggregateCache
 
 function statusFilter(value: string | undefined): UsageStatusFilter {
   return ['2xx', '4xx', '5xx', '429'].includes(value || '')
@@ -137,19 +153,7 @@ function seriesLabel(date: Date, range: UsageRange) {
   return date.toLocaleDateString('en', { month: 'short', day: 'numeric' })
 }
 
-export async function getUsageDashboard(input: DashboardInput = {}) {
-  await requireAdmin()
-
-  const range = parseUsageRange(input.range)
-  const selectedStatus = statusFilter(input.status)
-  const requestedCountry = input.country?.slice(0, 16) || 'all'
-  const selectedCountry = requestedCountry === 'unknown'
-    ? 'unknown'
-    : /^[a-z]{2}$/i.test(requestedCountry)
-      ? requestedCountry.toUpperCase()
-      : 'all'
-  const search = input.search?.trim().slice(0, 100) || ''
-  const page = Math.max(1, Math.trunc(input.page || 1))
+async function loadUsageAggregates(range: UsageRange) {
   const now = new Date()
   const durationMs = usageRangeHours(range) * HOUR_MS
   const start = new Date(now.getTime() - durationMs)
@@ -159,33 +163,21 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
   const activeStart = new Date(now.getTime() - 5 * 60 * 1000)
   const previousActiveStart = new Date(now.getTime() - 10 * 60 * 1000)
 
+  // Keep aggregate refreshes below the 10-connection MySQL pool limit so a
+  // background dashboard refresh cannot crowd out normal API traffic.
   const [
     previousStatuses,
     previousCaches,
-    activeClients,
-    previousActiveClients,
     hourlyStatuses,
     hourlyCaches,
-    hourlyClients,
-    endpointRows,
-    countryRows,
-    keyRows,
-    topIpRows,
-    blockedIpRows,
+    currentLatencySample,
+    previousLatencySample,
   ] = await Promise.all([
     prisma.apiRequestLog.groupBy({ by: ['status'], where: previousWhere, _count: { _all: true } }),
     prisma.apiRequestLog.groupBy({
       by: ['cacheStatus'],
       where: { ...previousWhere, cacheStatus: { in: ['hit', 'miss'] } },
       _count: { _all: true },
-    }),
-    prisma.apiRequestLog.groupBy({
-      by: ['apiKeyId', 'ipAddress'],
-      where: { apiKeyId: { not: null }, createdAt: { gte: activeStart, lte: now } },
-    }),
-    prisma.apiRequestLog.groupBy({
-      by: ['apiKeyId', 'ipAddress'],
-      where: { apiKeyId: { not: null }, createdAt: { gte: previousActiveStart, lt: activeStart } },
     }),
     prisma.apiRequestLog.groupBy({
       by: ['hourBucket', 'status'],
@@ -196,6 +188,37 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
       by: ['hourBucket', 'cacheStatus'],
       where: { ...currentWhere, cacheStatus: { in: ['hit', 'miss'] } },
       _count: { _all: true },
+    }),
+    prisma.apiRequestLog.findMany({
+      where: currentWhere,
+      orderBy: { createdAt: 'desc' },
+      take: LATENCY_SAMPLE_SIZE,
+      select: { durationMs: true },
+    }),
+    prisma.apiRequestLog.findMany({
+      where: previousWhere,
+      orderBy: { createdAt: 'desc' },
+      take: LATENCY_SAMPLE_SIZE,
+      select: { durationMs: true },
+    }),
+  ])
+
+  const [
+    activeClients,
+    previousActiveClients,
+    hourlyClients,
+    endpointRows,
+    countryRows,
+    keyRows,
+    topIpRows,
+  ] = await Promise.all([
+    prisma.apiRequestLog.groupBy({
+      by: ['apiKeyId', 'ipAddress'],
+      where: { apiKeyId: { not: null }, createdAt: { gte: activeStart, lte: now } },
+    }),
+    prisma.apiRequestLog.groupBy({
+      by: ['apiKeyId', 'ipAddress'],
+      where: { apiKeyId: { not: null }, createdAt: { gte: previousActiveStart, lt: activeStart } },
     }),
     prisma.apiRequestLog.groupBy({
       by: ['hourBucket', 'apiKeyId', 'ipAddress'],
@@ -226,8 +249,76 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
       orderBy: { _count: { ipAddress: 'desc' } },
       take: 8,
     }),
-    prisma.blockedIp.findMany({ orderBy: { createdAt: 'desc' } }),
   ])
+
+  const topIpAddresses = (topIpRows as TopIpRow[]).map(row => row.ipAddress)
+  const ipBreakdownRows = topIpAddresses.length
+    ? await prisma.apiRequestLog.groupBy({
+        by: ['ipAddress', 'status', 'cacheStatus'],
+        where: { ...currentWhere, ipAddress: { in: topIpAddresses } },
+        _count: { _all: true },
+      })
+    : []
+
+  return {
+    now,
+    start,
+    previousStatuses,
+    previousCaches,
+    activeClients,
+    previousActiveClients,
+    hourlyStatuses,
+    hourlyCaches,
+    hourlyClients,
+    endpointRows,
+    countryRows,
+    keyRows,
+    topIpRows,
+    currentLatencySample,
+    previousLatencySample,
+    ipBreakdownRows,
+  }
+}
+
+export async function warmUsageDashboardCache(range: UsageRange = '24h') {
+  await usageAggregateCache.get(range, () => loadUsageAggregates(range))
+}
+
+export function clearUsageDashboardCache() {
+  usageAggregateCache.clear()
+}
+
+export async function getUsageDashboard(input: DashboardInput = {}) {
+  await requireAdmin()
+
+  const range = parseUsageRange(input.range)
+  const selectedStatus = statusFilter(input.status)
+  const requestedCountry = input.country?.slice(0, 16) || 'all'
+  const selectedCountry = requestedCountry === 'unknown'
+    ? 'unknown'
+    : /^[a-z]{2}$/i.test(requestedCountry)
+      ? requestedCountry.toUpperCase()
+      : 'all'
+  const search = input.search?.trim().slice(0, 100) || ''
+  const page = Math.max(1, Math.trunc(input.page || 1))
+  const {
+    now,
+    start,
+    previousStatuses,
+    previousCaches,
+    activeClients,
+    previousActiveClients,
+    hourlyStatuses,
+    hourlyCaches,
+    hourlyClients,
+    endpointRows,
+    countryRows,
+    keyRows,
+    topIpRows,
+    currentLatencySample,
+    previousLatencySample,
+    ipBreakdownRows,
+  } = await usageAggregateCache.get(range, () => loadUsageAggregates(range))
 
   const currentStatuses = hourlyStatuses as HourlyStatusRow[]
   const currentCaches = hourlyCaches as HourlyCacheRow[]
@@ -257,7 +348,10 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
         .filter((code): code is string => Boolean(code))
     : []
 
-  const logWhereParts: Prisma.ApiRequestLogWhereInput[] = [currentWhere]
+  const liveNow = new Date()
+  const liveStart = new Date(liveNow.getTime() - usageRangeHours(range) * HOUR_MS)
+  const logCurrentWhere = { createdAt: { gte: liveStart, lte: liveNow } }
+  const logWhereParts: Prisma.ApiRequestLogWhereInput[] = [logCurrentWhere]
   const selectedStatusWhere = statusWhere(selectedStatus)
   if (selectedStatusWhere) logWhereParts.push(selectedStatusWhere)
   if (selectedCountry === 'unknown') logWhereParts.push({ countryCode: null })
@@ -275,22 +369,7 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
     })
   }
   const logWhere: Prisma.ApiRequestLogWhereInput = { AND: logWhereParts }
-  const topIpAddresses = (topIpRows as TopIpRow[]).map(row => row.ipAddress)
-
-  // ponytail: sample recent latency rows; pre-aggregate if exact full-range P95 becomes necessary.
-  const [currentLatencySample, previousLatencySample, logs, filteredTotal, ipBreakdownRows] = await Promise.all([
-    prisma.apiRequestLog.findMany({
-      where: currentWhere,
-      orderBy: { createdAt: 'desc' },
-      take: LATENCY_SAMPLE_SIZE,
-      select: { durationMs: true },
-    }),
-    prisma.apiRequestLog.findMany({
-      where: previousWhere,
-      orderBy: { createdAt: 'desc' },
-      take: LATENCY_SAMPLE_SIZE,
-      select: { durationMs: true },
-    }),
+  const [logs, filteredTotal, blockedIpRows] = await Promise.all([
     prisma.apiRequestLog.findMany({
       where: logWhere,
       orderBy: { createdAt: 'desc' },
@@ -298,13 +377,7 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
       take: PAGE_SIZE,
     }),
     prisma.apiRequestLog.count({ where: logWhere }),
-    topIpAddresses.length
-      ? prisma.apiRequestLog.groupBy({
-          by: ['ipAddress', 'status', 'cacheStatus'],
-          where: { ...currentWhere, ipAddress: { in: topIpAddresses } },
-          _count: { _all: true },
-        })
-      : Promise.resolve([]),
+    prisma.blockedIp.findMany({ orderBy: { createdAt: 'desc' } }),
   ])
 
   const series = buildSeries(

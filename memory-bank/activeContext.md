@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-Project caps disposable TMDB database cache data at 100,000 rows by default across raw mirror responses, movies, and TV shows. Limit enforcement is a process-local single-flight background maintainer: checks are throttled, database operations are sequential, and eviction uses controlled 1,000-row batches to avoid MySQL connection-pool exhaustion. The independent `data/media` cache tracks growth between trims, uses bounded file-stat concurrency, and trims to a 90% low-water mark instead of rescanning tens of thousands of files on every miss. The admin Sync page provides a serialized, batched database-cache clear suitable before backups while preserving application data and Search Fixes state. Deployment uses normal `next start` behind PM2/nginx.
+Project caps disposable TMDB database cache data at 100,000 rows by default across raw mirror responses, movies, and TV shows. Limit enforcement is a process-local single-flight background maintainer with sequential 1,000-row eviction batches. The independent `data/media` cache tracks growth, uses bounded file-stat concurrency, and trims to a 90% low-water mark. Usage-dashboard aggregates are warmed after authenticated admin renders and use a one-minute stale-while-refresh cache, while the request list remains live. Deployment uses normal `next start` behind PM2/nginx.
 
 ## Recent Changes
 - **Project Creation**: Built complete TMDB Service from scratch with Next.js 16, Prisma, next-auth, and shadcn/ui.
@@ -28,6 +28,7 @@ Project caps disposable TMDB database cache data at 100,000 rows by default acro
 - **Backup-Friendly Cache Clear**: Added a confirmed admin action under **Sync** that clears raw TMDB responses and normalized movie/TV rows while preserving manual mappings, captured/dismissed Search Fixes, and non-cache application data.
 - **Media Storage Separation**: TMDB image paths are stored in database JSON/columns, while image files are cached independently on disk under `data/media`; clearing database cache rows does not clear the bounded media cache.
 - **Media Trim Performance**: Replaced per-miss unbounded `Promise.all(stat)` scans with tracked cache bytes, 16-worker filesystem scans, a five-minute trim guard, a 10% emergency overage, and a 90% low-water target.
+- **Usage Dashboard Performance**: Expensive 24-hour aggregates warm after authenticated admin responses; all range aggregates are single-flight, fresh for one minute, and served stale during background refresh. Logs and filters still query current data, and clearing logs invalidates cached metrics.
 
 ## Next Steps
 - Optional: add scheduled refresh using TMDB daily ID exports and changes endpoints.

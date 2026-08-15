@@ -8,6 +8,7 @@ import { getDatabaseProvider } from '@/lib/database-provider'
 import { validIpAddress } from '@/lib/ip-address'
 import prisma from '@/lib/prisma'
 import { paginationParams } from '@/lib/pagination'
+import { clearUsageDashboardCache } from '@/lib/usage-dashboard'
 import { getCachedTmdb, setSearchCaptureDismissed, upsertTmdbCache } from '@/lib/tmdb-cache'
 import {
   clearCachedData,
@@ -433,6 +434,7 @@ export async function clearApiRequestLogs() {
   } else {
     await prisma.$executeRaw`TRUNCATE TABLE ApiRequestLog`
   }
+  clearUsageDashboardCache()
   revalidatePath('/admin/usage')
 }
 
