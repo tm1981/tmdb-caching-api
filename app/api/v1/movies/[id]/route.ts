@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getMovieDetails, extractMovieData } from '@/lib/tmdb'
+import { getMovieDetails, extractMovieData, TmdbApiError } from '@/lib/tmdb'
 import { withApiUsage } from '@/lib/api-usage'
 import { scheduleCachedDataLimitEnforcement } from '@/lib/cache-limit'
 
@@ -42,9 +42,19 @@ async function getMovie(
         },
       })
     } catch (error: any) {
+      const upstreamLimit = error instanceof TmdbApiError && error.status === 429
       return NextResponse.json(
         { error: `Failed to fetch movie from TMDB: ${error.message}` },
-        { status: 502, headers: { 'x-tmdb-cache': 'bypass' } }
+        {
+          status: upstreamLimit ? 429 : 502,
+          headers: {
+            'x-tmdb-cache': 'bypass',
+            ...(upstreamLimit && {
+              'x-ratelimit-source': 'tmdb',
+              'retry-after': error.retryAfter || '60',
+            }),
+          },
+        }
       )
     }
   }

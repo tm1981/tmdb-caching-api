@@ -32,6 +32,7 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - Stale generated Prisma output removed from `app/generated/`; PostgreSQL migrations are tracked, while MySQL/MariaDB currently use `prisma db push`
 - Admin-only `/admin/usage` dashboard with range comparisons, charts, filters, 25-row pagination, responsive request details, and refresh
 - Non-blocking `/api/v1` request logging via Next.js `after()`, including auth failures, rate limits, cache status, redacted query data, trusted proxy IP/country data, and 30-day pruning
+- Source-aware rate-limit logging and dashboard reporting distinguish upstream TMDB API-key throttling from the app's local IP guard
 - Large-log usage navigation avoids duplicate current-period aggregates and calculates P95 from a bounded 5,000-row recent sample
 - Admins can permanently clear all API request logs after confirmation; the server action uses provider-specific native truncation
 

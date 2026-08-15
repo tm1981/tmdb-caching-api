@@ -42,6 +42,7 @@ X-TMDB-Cache: bypass
 ```
 
 Clients should branch on status `429`, inspect `X-RateLimit-Source`, and wait for `Retry-After` seconds before retrying.
+The Usage dashboard persists this source and reports TMDB upstream throttling separately from the app's IP guard.
 
 ## TMDB Mirror
 

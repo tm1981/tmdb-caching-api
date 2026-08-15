@@ -120,6 +120,8 @@ async function search(req: NextRequest) {
   const tmdbTvShows = tmdbResults.filter((item) => item.media_type === 'tv')
   const tmdbPeople = tmdbResults.filter((item) => item.media_type === 'person')
 
+  const upstreamLimit = tmdb.cache === 'bypass' && tmdb.status === 429
+
   return NextResponse.json({
     data: {
       movies: movies.map((m) => ({
@@ -174,7 +176,15 @@ async function search(req: NextRequest) {
         })),
       },
     },
-  }, { headers: { 'x-tmdb-cache': tmdb.cache } })
+  }, {
+    headers: {
+      'x-tmdb-cache': tmdb.cache,
+      ...(upstreamLimit && {
+        'x-ratelimit-source': 'tmdb',
+        'retry-after': tmdb.retryAfter || '60',
+      }),
+    },
+  })
 }
 
 export const GET = withApiUsage(search)

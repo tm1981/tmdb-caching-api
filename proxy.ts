@@ -61,7 +61,7 @@ export async function proxy(request: NextRequest) {
 
     const ipLimit = checkRequestRateLimit(request.headers, `api-auth:${ipAddress || 'unknown'}`, 120)
     if (!ipLimit.allowed) {
-      queueProxyUsage(request, 429, startedAt)
+      queueProxyUsage(request, 429, startedAt, null, 'tmdb-service')
       return rateLimitResponse(ipLimit)
     }
 

@@ -135,11 +135,23 @@ export async function getCachedTmdb<T>(
 
   if (!refresh) {
     const cached = await prisma.tmdbCache.findUnique({ where: { cacheKey } })
-    if (cached) return { payload: cached.payload as T, cache: 'hit' as const, updatedAt: cached.updatedAt }
+    if (cached) return {
+      payload: cached.payload as T,
+      cache: 'hit' as const,
+      updatedAt: cached.updatedAt,
+      status: cached.status,
+      retryAfter: null,
+    }
   }
 
   const result = await tmdbRawRequest(endpoint, new URLSearchParams(query))
-  if (!result.ok) return { payload: result.payload as T, cache: 'bypass' as const, updatedAt: null }
+  if (!result.ok) return {
+    payload: result.payload as T,
+    cache: 'bypass' as const,
+    updatedAt: null,
+    status: result.status,
+    retryAfter: result.retryAfter,
+  }
 
   const cached = await upsertTmdbCache({
     cacheKey,
@@ -149,5 +161,11 @@ export async function getCachedTmdb<T>(
     payload: result.payload,
   })
 
-  return { payload: result.payload as T, cache: 'miss' as const, updatedAt: cached.updatedAt }
+  return {
+    payload: result.payload as T,
+    cache: 'miss' as const,
+    updatedAt: cached.updatedAt,
+    status: result.status,
+    retryAfter: result.retryAfter,
+  }
 }

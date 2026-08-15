@@ -29,12 +29,13 @@ type DashboardInput = {
 
 type CountRow = { _count: { _all: number } }
 type StatusRow = CountRow & { status: number }
+type RateLimitRow = StatusRow & { rateLimitSource: string | null }
 type CacheRow = CountRow & { cacheStatus: string | null }
-type HourlyStatusRow = StatusRow & { hourBucket: Date }
+type HourlyStatusRow = RateLimitRow & { hourBucket: Date }
 type HourlyCacheRow = CacheRow & { hourBucket: Date }
 type HourlyClientRow = { hourBucket: Date; apiKeyId: number | null; ipAddress: string }
 type TopIpRow = CountRow & { ipAddress: string; _avg: { durationMs: number | null } }
-type IpBreakdownRow = StatusRow & { ipAddress: string; cacheStatus: string | null }
+type IpBreakdownRow = RateLimitRow & { ipAddress: string; cacheStatus: string | null }
 
 type UsageAggregateData = Awaited<ReturnType<typeof loadUsageAggregates>>
 type UsageAggregateCache = ReturnType<
@@ -73,6 +74,15 @@ function statusCount(rows: StatusRow[], predicate: (status: number) => boolean) 
     (total, row) => total + (predicate(row.status) ? row._count._all : 0),
     0,
   )
+}
+
+function rateLimitCount(rows: RateLimitRow[], source?: 'tmdb' | 'tmdb-service') {
+  return rows.reduce((total, row) => {
+    const matches = source
+      ? row.rateLimitSource === source
+      : row.status === 429 || row.rateLimitSource !== null
+    return total + (matches ? row._count._all : 0)
+  }, 0)
 }
 
 function cacheCount(rows: CacheRow[], value: string) {
@@ -173,14 +183,14 @@ async function loadUsageAggregates(range: UsageRange) {
     currentLatencySample,
     previousLatencySample,
   ] = await Promise.all([
-    prisma.apiRequestLog.groupBy({ by: ['status'], where: previousWhere, _count: { _all: true } }),
+    prisma.apiRequestLog.groupBy({ by: ['status', 'rateLimitSource'], where: previousWhere, _count: { _all: true } }),
     prisma.apiRequestLog.groupBy({
       by: ['cacheStatus'],
       where: { ...previousWhere, cacheStatus: { in: ['hit', 'miss'] } },
       _count: { _all: true },
     }),
     prisma.apiRequestLog.groupBy({
-      by: ['hourBucket', 'status'],
+      by: ['hourBucket', 'status', 'rateLimitSource'],
       where: currentWhere,
       _count: { _all: true },
     }),
@@ -254,7 +264,7 @@ async function loadUsageAggregates(range: UsageRange) {
   const topIpAddresses = (topIpRows as TopIpRow[]).map(row => row.ipAddress)
   const ipBreakdownRows = topIpAddresses.length
     ? await prisma.apiRequestLog.groupBy({
-        by: ['ipAddress', 'status', 'cacheStatus'],
+        by: ['ipAddress', 'status', 'cacheStatus', 'rateLimitSource'],
         where: { ...currentWhere, ipAddress: { in: topIpAddresses } },
         _count: { _all: true },
       })
@@ -330,8 +340,12 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
   const misses = cacheCount(currentCaches, 'miss')
   const previousHits = cacheCount(previousCaches, 'hit')
   const previousMisses = cacheCount(previousCaches, 'miss')
-  const rateLimited = statusCount(currentStatuses, status => status === 429)
-  const previousRateLimited = statusCount(previousStatuses, status => status === 429)
+  const rateLimited = rateLimitCount(currentStatuses)
+  const previousRateLimited = rateLimitCount(previousStatuses as RateLimitRow[])
+  const tmdbRateLimited = rateLimitCount(currentStatuses, 'tmdb')
+  const previousTmdbRateLimited = rateLimitCount(previousStatuses as RateLimitRow[], 'tmdb')
+  const localRateLimited = rateLimitCount(currentStatuses, 'tmdb-service')
+  const previousLocalRateLimited = rateLimitCount(previousStatuses as RateLimitRow[], 'tmdb-service')
   const successRate = percentage(successful, total)
   const previousSuccessRate = percentage(previousSuccessful, previousTotal)
   const cacheHitRate = percentage(hits, hits + misses)
@@ -353,7 +367,9 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
   const logCurrentWhere = { createdAt: { gte: liveStart, lte: liveNow } }
   const logWhereParts: Prisma.ApiRequestLogWhereInput[] = [logCurrentWhere]
   const selectedStatusWhere = statusWhere(selectedStatus)
-  if (selectedStatusWhere) logWhereParts.push(selectedStatusWhere)
+  if (selectedStatus === '429') {
+    logWhereParts.push({ OR: [{ status: 429 }, { rateLimitSource: { not: null } }] })
+  } else if (selectedStatusWhere) logWhereParts.push(selectedStatusWhere)
   if (selectedCountry === 'unknown') logWhereParts.push({ countryCode: null })
   else if (/^[A-Z]{2}$/.test(selectedCountry)) logWhereParts.push({ countryCode: selectedCountry })
   if (search) {
@@ -364,6 +380,7 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
         { ipAddress: { contains: search } },
         { apiKeyLabel: { contains: search } },
         { apiKeyPrefix: { contains: search } },
+        { rateLimitSource: { contains: search } },
         ...(matchedCountries.length ? [{ countryCode: { in: matchedCountries } }] : []),
       ],
     })
@@ -407,7 +424,7 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
     const stats = ipStats.get(row.ipAddress) || { successful: 0, failed: 0, rateLimited: 0, hits: 0, misses: 0 }
     if (row.status < 400) stats.successful += row._count._all
     else stats.failed += row._count._all
-    if (row.status === 429) stats.rateLimited += row._count._all
+    if (row.status === 429 || row.rateLimitSource !== null) stats.rateLimited += row._count._all
     if (row.cacheStatus === 'hit') stats.hits += row._count._all
     if (row.cacheStatus === 'miss') stats.misses += row._count._all
     ipStats.set(row.ipAddress, stats)
@@ -458,6 +475,14 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
       },
       p95Latency: { value: p95Latency, change: percentChange(p95Latency, previousP95Latency) },
       rateLimited: { value: rateLimited, change: percentChange(rateLimited, previousRateLimited) },
+      tmdbRateLimited: {
+        value: tmdbRateLimited,
+        change: percentChange(tmdbRateLimited, previousTmdbRateLimited),
+      },
+      localRateLimited: {
+        value: localRateLimited,
+        change: percentChange(localRateLimited, previousLocalRateLimited),
+      },
     },
     requestsOverTime: series.requests.map((value, index) => ({
       value,

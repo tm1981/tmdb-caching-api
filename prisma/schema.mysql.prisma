@@ -28,26 +28,28 @@ model ApiKey {
 }
 
 model ApiRequestLog {
-  id           Int      @id @default(autoincrement())
-  apiKey       ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
-  apiKeyId     Int?
-  apiKeyLabel  String?
-  apiKeyPrefix String   @default("")
-  method       String   @default("GET")
-  endpoint     String   @db.VarChar(512)
-  query        String   @default("") @db.Text
-  status       Int
-  durationMs   Int
-  ipAddress    String   @db.VarChar(45)
-  countryCode  String?  @db.VarChar(2)
-  cacheStatus  String?  @db.VarChar(16)
-  hourBucket   DateTime
-  createdAt    DateTime @default(now())
+  id              Int      @id @default(autoincrement())
+  apiKey          ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  apiKeyId        Int?
+  apiKeyLabel     String?
+  apiKeyPrefix    String   @default("")
+  method          String   @default("GET")
+  endpoint        String   @db.VarChar(512)
+  query           String   @default("") @db.Text
+  status          Int
+  durationMs      Int
+  ipAddress       String   @db.VarChar(45)
+  countryCode     String?  @db.VarChar(2)
+  cacheStatus     String?  @db.VarChar(16)
+  rateLimitSource String?  @db.VarChar(16)
+  hourBucket      DateTime
+  createdAt       DateTime @default(now())
 
   @@index([createdAt])
   @@index([createdAt, ipAddress])
   @@index([hourBucket])
   @@index([apiKeyId, createdAt])
+  @@index([rateLimitSource, createdAt])
 }
 
 model BlockedIp {

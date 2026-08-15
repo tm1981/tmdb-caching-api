@@ -96,6 +96,10 @@ export function normalizedCacheStatus(value: string | null) {
   return value === 'hit' || value === 'miss' || value === 'bypass' ? value : null
 }
 
+export function normalizedRateLimitSource(value: string | null) {
+  return value === 'tmdb' || value === 'tmdb-service' ? value : null
+}
+
 export function polylinePoints(values: number[], width: number, height: number) {
   if (!values.length) return ''
   const maximum = Math.max(...values, 1)

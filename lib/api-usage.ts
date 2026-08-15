@@ -6,6 +6,7 @@ import {
   clientCountryCode,
   clientIp,
   normalizedCacheStatus,
+  normalizedRateLimitSource,
   sanitizeQuery,
   utcHour,
 } from '@/lib/usage'
@@ -33,6 +34,7 @@ type UsageWrite = {
   ipAddress: string
   countryCode: string | null
   cacheStatus: string | null
+  rateLimitSource: string | null
   hourBucket: Date
   createdAt: Date
 }
@@ -63,6 +65,7 @@ function usageWrite(
   status: number,
   durationMs: number,
   cacheStatus: string | null,
+  rateLimitSource: string | null,
   key = requestKey(request),
 ): UsageWrite {
   const createdAt = new Date()
@@ -78,6 +81,7 @@ function usageWrite(
     ipAddress: clientIp(request.headers),
     countryCode: clientCountryCode(request.headers),
     cacheStatus: normalizedCacheStatus(cacheStatus),
+    rateLimitSource: normalizedRateLimitSource(rateLimitSource),
     hourBucket: utcHour(createdAt),
     createdAt,
   }
@@ -118,8 +122,9 @@ export function queueProxyUsage(
   status: number,
   startedAt: number,
   key: ApiKeySnapshot | null = null,
+  rateLimitSource: string | null = null,
 ) {
-  queueUsage(usageWrite(request, status, performance.now() - startedAt, null, key))
+  queueUsage(usageWrite(request, status, performance.now() - startedAt, null, rateLimitSource, key))
 }
 
 export function withApiUsage<Context>(
@@ -130,8 +135,9 @@ export function withApiUsage<Context>(
     let status = 500
     let durationMs = 0
     let cacheStatus: string | null = null
+    let rateLimitSource: string | null = null
 
-    after(() => persistUsage(usageWrite(request, status, durationMs, cacheStatus)).catch(error => {
+    after(() => persistUsage(usageWrite(request, status, durationMs, cacheStatus, rateLimitSource)).catch(error => {
       console.warn('API usage log failed:', error)
     }))
 
@@ -139,6 +145,7 @@ export function withApiUsage<Context>(
       const response = await handler(request, context)
       status = response.status
       cacheStatus = response.headers.get('x-tmdb-cache')
+      rateLimitSource = response.headers.get('x-ratelimit-source')
       return response
     } finally {
       durationMs = performance.now() - startedAt

@@ -16,7 +16,7 @@ Project caps disposable TMDB database cache data at 100,000 rows by default acro
 - **Multi-DB Startup**: `proxy.ts` now uses the shared provider-aware Prisma adapter, and docs/env examples default to MySQL install.
 - **Cleanup**: Removed stale tracked `app/generated/prisma` output, ignored future `app/generated/`, and unignored `prisma/migrations/`.
 - **Usage Logging**: Added `ApiRequestLog`, API-key snapshots, query redaction, cache state, IP/country metadata, UTC buckets, and once-daily 30-day pruning through `after()`.
-- **Usage Dashboard**: Added `/admin/usage` with 24h/7d/30d comparisons, active clients, success/cache rates, request charts, endpoints, countries, statuses, keys, P95 latency, rate limits, filters, and pagination.
+- **Usage Dashboard**: Added `/admin/usage` with 24h/7d/30d comparisons, active clients, success/cache rates, request charts, endpoints, countries, statuses, keys, P95 latency, source-aware TMDB/app rate-limit reporting, filters, and pagination.
 - **Large Log Performance**: Current status/cache totals reuse hourly groupings, and P95 latency uses the latest 5,000 rows per comparison window instead of sorting the full range.
 - **Manual Log Cleanup**: Added a confirmed admin-only **Clear logs** action using native PostgreSQL/MySQL/MariaDB table truncation.
 - **GeoIP Fallback**: Missing proxy country headers fall back to a watched local GeoLite2 Country MMDB; the admin-only Usage page can freshness-check, download, validate, and replace it.

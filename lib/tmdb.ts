@@ -1,6 +1,22 @@
 const TMDB_BASE = 'https://api.themoviedb.org/3'
 const API_KEY = process.env.TMDB_API_KEY!
 
+export class TmdbApiError extends Error {
+  readonly status: number
+  readonly retryAfter: string | null
+
+  constructor(
+    status: number,
+    retryAfter: string | null,
+    statusText: string,
+  ) {
+    super(`TMDB API error: ${status} ${statusText}`)
+    this.name = 'TmdbApiError'
+    this.status = status
+    this.retryAfter = retryAfter
+  }
+}
+
 async function tmdbRequest<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
   const url = new URL(`${TMDB_BASE}${endpoint}`)
   for (const [key, value] of Object.entries(params)) {
@@ -16,7 +32,7 @@ async function tmdbRequest<T>(endpoint: string, params: Record<string, string> =
   })
 
   if (!res.ok) {
-    throw new Error(`TMDB API error: ${res.status} ${res.statusText}`)
+    throw new TmdbApiError(res.status, res.headers.get('retry-after'), res.statusText)
   }
 
   return res.json()
@@ -244,7 +260,10 @@ export async function extractTvDataFull(data: Awaited<ReturnType<typeof getTvDet
             episodeNumber: ep.episode_number, seasonNumber: ep.season_number,
             airDate: ep.air_date, runtime: ep.runtime, voteAverage: ep.vote_average, voteCount: ep.vote_count,
           }))
-        } catch { /* skip episodes on error */ }
+        } catch (error) {
+          if (error instanceof TmdbApiError && error.status === 429) throw error
+          // Skip a season's episodes for non-rate-limit upstream failures.
+        }
         return {
           id: season.id, name: season.name, seasonNumber: season.season_number,
           episodeCount: season.episode_count, overview: season.overview,
@@ -253,7 +272,10 @@ export async function extractTvDataFull(data: Awaited<ReturnType<typeof getTvDet
       }))
       seasons.push(...results)
     }
-  } catch { /* skip seasons on error */ }
+  } catch (error) {
+    if (error instanceof TmdbApiError && error.status === 429) throw error
+    // Preserve the show without seasons for non-rate-limit upstream failures.
+  }
 
   return {
     tmdbId: data.id,

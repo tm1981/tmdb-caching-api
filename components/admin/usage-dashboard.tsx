@@ -347,6 +347,12 @@ function Operations({ data }: { data: UsageDashboardData }) {
       <div className="border-t pt-4 sm:border-l sm:border-t-0 sm:pl-4 md:border-l-0 md:border-t md:pl-0">
         <p className="text-xs text-muted-foreground">Rate limited</p>
         <p className="mt-1 text-2xl font-semibold tracking-tight">{wholeNumber.format(data.metrics.rateLimited.value)}</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <Badge variant={data.metrics.tmdbRateLimited.value ? 'destructive' : 'outline'}>
+            TMDB {wholeNumber.format(data.metrics.tmdbRateLimited.value)}
+          </Badge>
+          <Badge variant="outline">App IP guard {wholeNumber.format(data.metrics.localRateLimited.value)}</Badge>
+        </div>
         <div className="mt-1"><Trend value={data.metrics.rateLimited.change} invert /></div>
       </div>
     </div>
@@ -393,11 +399,21 @@ function MobileAnalytics({ data }: { data: UsageDashboardData }) {
       value: wholeNumber.format(data.metrics.rateLimited.value),
       icon: ShieldAlert,
       content: (
-        <OperationMetric
-          label="HTTP 429 responses in this range"
-          value={wholeNumber.format(data.metrics.rateLimited.value)}
-          change={data.metrics.rateLimited.change}
-        />
+        <div className="space-y-3">
+          <OperationMetric
+            label="Rate-limit events in this range"
+            value={wholeNumber.format(data.metrics.rateLimited.value)}
+            change={data.metrics.rateLimited.change}
+          />
+          <div className="flex flex-wrap gap-2">
+            <Badge variant={data.metrics.tmdbRateLimited.value ? 'destructive' : 'outline'}>
+              TMDB upstream {wholeNumber.format(data.metrics.tmdbRateLimited.value)}
+            </Badge>
+            <Badge variant="outline">
+              App IP guard {wholeNumber.format(data.metrics.localRateLimited.value)}
+            </Badge>
+          </div>
+        </div>
       ),
     },
   ]
@@ -426,6 +442,12 @@ function statusBadge(status: number) {
 function cacheBadge(cacheStatus: string | null) {
   if (!cacheStatus) return <span className="text-muted-foreground">—</span>
   return <Badge variant={cacheStatus === 'hit' ? 'success' : cacheStatus === 'miss' ? 'secondary' : 'outline'}>{cacheStatus.toUpperCase()}</Badge>
+}
+
+function rateLimitBadge(source: string | null) {
+  if (source === 'tmdb') return <Badge variant="destructive">TMDB LIMIT</Badge>
+  if (source === 'tmdb-service') return <Badge variant="outline">APP LIMIT</Badge>
+  return null
 }
 
 function apiKeyName(log: UsageDashboardData['logs'][number]) {
@@ -457,7 +479,9 @@ function DesktopRequestTable({ data }: { data: UsageDashboardData }) {
               <TableCell className="max-w-[190px] truncate" title={apiKeyName(log)}>{apiKeyName(log)}</TableCell>
               <TableCell className="max-w-[260px] truncate" title={log.endpoint}>{log.endpoint}</TableCell>
               <TableCell className="max-w-[240px] truncate" title={log.query}>{log.query || '—'}</TableCell>
-              <TableCell>{statusBadge(log.status)}</TableCell>
+              <TableCell>
+                <div className="flex flex-wrap gap-1">{statusBadge(log.status)}{rateLimitBadge(log.rateLimitSource)}</div>
+              </TableCell>
               <TableCell>{log.ipAddress}</TableCell>
               <TableCell>{countryName(log.countryCode)}</TableCell>
               <TableCell className="text-right tabular-nums">{log.durationMs} ms</TableCell>
@@ -501,6 +525,7 @@ function MobileRequestList({ data }: { data: UsageDashboardData }) {
             <dt>Country</dt><dd>{countryName(log.countryCode)}</dd>
             <dt>Duration</dt><dd>{log.durationMs} ms</dd>
             <dt>Cache</dt><dd>{cacheBadge(log.cacheStatus)}</dd>
+            <dt>Rate limit</dt><dd>{rateLimitBadge(log.rateLimitSource) || '—'}</dd>
           </dl>
         </details>
       ))}
