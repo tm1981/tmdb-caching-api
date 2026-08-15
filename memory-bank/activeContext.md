@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-Project caps disposable TMDB database cache data at 100,000 rows by default across raw mirror responses, movies, and TV shows. Limit enforcement is a process-local single-flight background maintainer: checks are throttled, database operations are sequential, and eviction uses controlled 1,000-row batches to avoid MySQL connection-pool exhaustion. The admin Sync page shows the combined count and provides a serialized, batched cache-clear action suitable before backups while preserving users, API keys, request logs, sync history, manual search corrections, and search-capture state. TMDB images remain in the independent bounded `data/media` disk cache. Deployment uses normal `next start` behind PM2/nginx.
+Project caps disposable TMDB database cache data at 100,000 rows by default across raw mirror responses, movies, and TV shows. Limit enforcement is a process-local single-flight background maintainer: checks are throttled, database operations are sequential, and eviction uses controlled 1,000-row batches to avoid MySQL connection-pool exhaustion. The independent `data/media` cache tracks growth between trims, uses bounded file-stat concurrency, and trims to a 90% low-water mark instead of rescanning tens of thousands of files on every miss. The admin Sync page provides a serialized, batched database-cache clear suitable before backups while preserving application data and Search Fixes state. Deployment uses normal `next start` behind PM2/nginx.
 
 ## Recent Changes
 - **Project Creation**: Built complete TMDB Service from scratch with Next.js 16, Prisma, next-auth, and shadcn/ui.
@@ -27,6 +27,7 @@ Project caps disposable TMDB database cache data at 100,000 rows by default acro
 - **Cache Capacity**: Added `TMDB_CACHE_MAX_ROWS` (default 100,000) across disposable `TmdbCache`, `Movie`, and `TvShow` rows; writes schedule one non-blocking, process-local cleanup at a time, with sequential counts and 1,000-row eviction batches.
 - **Backup-Friendly Cache Clear**: Added a confirmed admin action under **Sync** that clears raw TMDB responses and normalized movie/TV rows while preserving manual mappings, captured/dismissed Search Fixes, and non-cache application data.
 - **Media Storage Separation**: TMDB image paths are stored in database JSON/columns, while image files are cached independently on disk under `data/media`; clearing database cache rows does not clear the bounded media cache.
+- **Media Trim Performance**: Replaced per-miss unbounded `Promise.all(stat)` scans with tracked cache bytes, 16-worker filesystem scans, a five-minute trim guard, a 10% emergency overage, and a 90% low-water target.
 
 ## Next Steps
 - Optional: add scheduled refresh using TMDB daily ID exports and changes endpoints.

@@ -5,8 +5,15 @@ import path from 'node:path'
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p'
 const DEFAULT_MAX_FILE_BYTES = 25 * 1024 * 1024
 const DEFAULT_MAX_CACHE_BYTES = 5 * 1024 * 1024 * 1024
+const TRIM_LOW_WATERMARK = 0.9
+const MIN_TRIM_INTERVAL_MS = 5 * 60 * 1000
+const EMERGENCY_OVERAGE_FACTOR = 1.1
+const FILE_STAT_CONCURRENCY = 16
 const inflight = new Map<string, Promise<CachedMedia>>()
 let trimPromise: Promise<void> | null = null
+let knownCacheBytes: number | null = null
+let additionsDuringScan: Map<string, number> | null = null
+let lastTrimCompletedAt = 0
 
 export type CachedMedia = {
   body: Buffer
@@ -107,14 +114,20 @@ async function fetchAndStore(
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
   }
 
+  if (knownCacheBytes !== null) knownCacheBytes += body.length
+  additionsDuringScan?.set(filename, body.length)
+
   return { body, contentType, cache: 'miss' }
 }
 
 export class InvalidMediaPathError extends Error {}
 
 export class MediaUpstreamError extends Error {
-  constructor(readonly status: number) {
+  readonly status: number
+
+  constructor(status: number) {
     super(`TMDB image request failed with status ${status}`)
+    this.status = status
   }
 }
 
@@ -131,33 +144,104 @@ export async function getCachedMedia(size: string, mediaPath: string[]) {
   return pending
 }
 
-export function trimMediaCache() {
-  if (trimPromise) return trimPromise
+type MediaFileDetails = {
+  filename: string
+  size: number
+  modified: number
+}
 
-  trimPromise = (async () => {
-    const directory = cacheDirectory()
-    let names: string[]
+async function statMediaFiles(directory: string, names: string[]) {
+  const files: MediaFileDetails[] = []
+  let nextIndex = 0
+
+  async function worker() {
+    while (true) {
+      const index = nextIndex++
+      if (index >= names.length) return
+
+      const name = names[index]
+      const filename = path.join(directory, name)
+      try {
+        const details = await stat(filename)
+        files.push({ filename, size: details.size, modified: details.mtimeMs })
+      } catch (error) {
+        // A file can disappear between readdir and stat when an operator clears the cache.
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+    }
+  }
+
+  const workerCount = Math.min(FILE_STAT_CONCURRENCY, names.length)
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+  return files
+}
+
+async function scanAndTrimMediaCache(maxCacheBytes: number) {
+  const directory = cacheDirectory()
+  let names: string[]
+  additionsDuringScan = new Map()
+
+  try {
     try {
-      names = await readdir(directory)
+      names = (await readdir(directory)).filter(name => !name.endsWith('.tmp'))
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        knownCacheBytes = 0
+        return
+      }
       throw error
     }
 
-    const files = (await Promise.all(names.filter(name => !name.endsWith('.tmp')).map(async name => {
-      const filename = path.join(directory, name)
-      const details = await stat(filename)
-      return { filename, size: details.size, modified: details.mtimeMs }
-    }))).sort((a, b) => a.modified - b.modified)
-
-    const maxCacheBytes = positiveBytes(process.env.MEDIA_CACHE_MAX_BYTES, DEFAULT_MAX_CACHE_BYTES)
+    const namesAtScanStart = new Set(names)
+    const files = await statMediaFiles(directory, names)
     let total = files.reduce((sum, file) => sum + file.size, 0)
-    for (const file of files) {
-      if (total <= maxCacheBytes) break
-      await rm(file.filename, { force: true })
-      total -= file.size
+
+    // Include files completed after the directory snapshot. Files already in the
+    // snapshot are represented by their stat result and must not be double-counted.
+    let countedAdditionBytes = 0
+    for (const [name, size] of additionsDuringScan) {
+      if (!namesAtScanStart.has(name)) total += size
+      if (!namesAtScanStart.has(name)) countedAdditionBytes += size
     }
-  })().finally(() => {
+
+    if (total > maxCacheBytes) {
+      const targetBytes = Math.floor(maxCacheBytes * TRIM_LOW_WATERMARK)
+      files.sort((a, b) => a.modified - b.modified)
+
+      for (const file of files) {
+        if (total <= targetBytes) break
+        await rm(file.filename, { force: true })
+        total -= file.size
+      }
+
+      lastTrimCompletedAt = Date.now()
+    }
+
+    let finalAdditionBytes = 0
+    for (const [name, size] of additionsDuringScan) {
+      if (!namesAtScanStart.has(name)) finalAdditionBytes += size
+    }
+    knownCacheBytes = Math.max(0, total - countedAdditionBytes + finalAdditionBytes)
+  } finally {
+    additionsDuringScan = null
+  }
+}
+
+export function trimMediaCache() {
+  if (trimPromise) return trimPromise
+  const maxCacheBytes = positiveBytes(process.env.MEDIA_CACHE_MAX_BYTES, DEFAULT_MAX_CACHE_BYTES)
+  if (knownCacheBytes !== null && knownCacheBytes <= maxCacheBytes) return Promise.resolve()
+
+  const recentlyTrimmed = Date.now() - lastTrimCompletedAt < MIN_TRIM_INTERVAL_MS
+  if (
+    knownCacheBytes !== null
+    && recentlyTrimmed
+    && knownCacheBytes <= maxCacheBytes * EMERGENCY_OVERAGE_FACTOR
+  ) {
+    return Promise.resolve()
+  }
+
+  trimPromise = scanAndTrimMediaCache(maxCacheBytes).finally(() => {
     trimPromise = null
   })
 

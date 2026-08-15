@@ -58,6 +58,7 @@
   - [x] Reduced large-log dashboard work by reusing hourly status/cache groupings and sampling the newest 5,000 latency rows for P95.
   - [x] Capped disposable raw/movie/TV cache rows at 100,000 by default with oldest-first eviction and preserved Search Fixes state; enforcement is throttled, single-flight, non-blocking, sequential, and batched to protect the MySQL pool.
   - [x] Documented that TMDB media files are separate from the database and live in the bounded `data/media` disk cache.
+  - [x] Prevented media-cache saturation from monopolizing Node CPU and memory by replacing per-miss 80K-file promise floods with tracked size, bounded scans, trim hysteresis, and an emergency overage guard.
  
 ## Known Issues
 - None currently.
