@@ -9,7 +9,7 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - Admin UI: Built from scratch with shadcn/ui + Tailwind CSS 4
 - Sync strategy: Manual admin triggers + lazy fetch on missing API requests
 - Auth: next-auth v4 CredentialsProvider (username/password, bcrypt)
-- API access: Required `x-api-key` header, in-memory rate limiting (60 req/min per key)
+- API access: Required `x-api-key` header with no per-key request limit; in-memory 120 req/min per-IP abuse guard
 - Landing page = `/login`; no public API docs page
 - Deployment: Self-hosted with `next start` behind PM2/nginx (not Vercel)
 
@@ -22,7 +22,7 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - Core libs: `lib/prisma.ts`, `lib/tmdb.ts` (API client), `lib/ratelimit.ts` (sliding window)
 - next-auth CredentialsProvider in `app/api/auth/[...nextauth]/route.ts`
 - Login page at `/login` with React Hook Form + Zod
-- API routes: `/api/v1/movies`, `/api/v1/movies/[id]`, `/api/v1/tv`, `/api/v1/tv/[id]`, `/api/v1/search` (lazy sync, pagination, rate limiting)
+- API routes: `/api/v1/movies`, `/api/v1/movies/[id]`, `/api/v1/tv`, `/api/v1/tv/[id]`, `/api/v1/search` (lazy sync, pagination, per-IP abuse protection)
 - Admin pages: `/admin/movies`, `/admin/tv`, `/admin/keys`, `/admin/sync` with shadcn/ui components
 - Server actions in `app/actions/db.ts` (CRUD, sync operations)
 - Root `/` page redirects based on session cookie (logged in → `/admin/movies`, not logged in → `/login`)
@@ -44,7 +44,7 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 ## Key Decisions
 - Next.js 16 for latest App Router + Turbopack support
 - Prisma 7 with `prisma.config.ts` (datasource URL moved out of `schema.prisma`)
-- In-memory rate limiter per API key (Map with timestamp cleanup)
+- In-memory 120 req/min per-IP abuse guard (Map with timestamp cleanup); no per-key request throttling
 - Lazy sync pattern: DB check → TMDB fetch → upsert → return
 - proxy.ts handles both admin session check and API key validation
 - Active clients are distinct authenticated API-key/IP pairs seen in the last five minutes
@@ -65,7 +65,7 @@ Build a Next.js 16 TMDB data caching service with public API (lazy sync), admin 
 - `app/actions/db.ts`: Server actions for admin CRUD + bulk sync
 - `app/admin/layout.tsx`: Sidebar navigation + `SignOutButton`
 - `lib/tmdb.ts`: TMDB API client with `getMovieDetails`, `getTvDetails`, `getTrending*`, `getTopRated*`
-- `lib/ratelimit.ts`: Sliding window rate limiter (60 req/min)
+- `lib/ratelimit.ts`: Sliding-window per-IP abuse guard (120 req/min at the proxy)
 - `lib/api-usage.ts`: Shared non-blocking API request logger and retention cleanup
 - `lib/usage-dashboard.ts`: Provider-neutral dashboard aggregations, bounded P95 sampling, and request-log queries
 - `lib/usage.ts`: Usage ranges, query redaction, proxy metadata parsing, percentile, and chart helpers

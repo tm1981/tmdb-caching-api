@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { checkRequestRateLimit, rateLimitResponse } from '@/lib/ratelimit'
 import { paginationParams } from '@/lib/pagination'
 import { withApiUsage } from '@/lib/api-usage'
 
@@ -14,13 +13,6 @@ async function getTvShows(req: NextRequest) {
     searchParams.get('limit') || undefined,
   )
   const query = searchParams.get('q') || ''
-  const apiKey = req.headers.get('x-api-key') || ''
-
-  const rateLimit = checkRequestRateLimit(req.headers, apiKey)
-  if (!rateLimit.allowed) {
-    return rateLimitResponse(rateLimit)
-  }
-
   const where: any = {}
   if (query) {
     where.OR = [

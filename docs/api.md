@@ -11,9 +11,9 @@ All public endpoints require:
 x-api-key: your_api_key
 ```
 
-The service rate-limits each API key to 60 requests per minute and applies a separate 120 requests-per-minute
-IP guard before authentication. Exact trusted server IPs listed in `RATE_LIMIT_BYPASS_IPS` bypass both local
-limits, but still require a valid API key and remain subject to blocked-IP rules. Forwarded IP headers must be
+API keys do not have individual request limits. The service applies a 120 requests-per-minute IP guard before
+authentication to protect all `/api/v1/*` routes. Exact trusted server IPs listed in `RATE_LIMIT_BYPASS_IPS`
+bypass this local IP limit, but still require a valid API key and remain subject to blocked-IP rules. Forwarded IP headers must be
 overwritten by the trusted nginx/CDN boundary.
 
 Local rate-limit responses are identifiable without parsing the message:

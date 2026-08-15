@@ -6,7 +6,7 @@ Project caps disposable TMDB database cache data at 100,000 rows by default acro
 ## Recent Changes
 - **Project Creation**: Built complete TMDB Service from scratch with Next.js 16, Prisma, next-auth, and shadcn/ui.
 - **Authentication**: Implemented next-auth Credentials Provider with username/password, bcrypt hashing, and middleware route protection.
-- **API Routes**: Built public API with movies, TV shows, and search endpoints. Added lazy-sync, pagination, rate limiting, and API key validation.
+- **API Routes**: Built public API with movies, TV shows, and search endpoints. Added lazy-sync, pagination, API key validation without per-key throttling, and a 120 req/min per-IP abuse guard.
 - **TMDB Mirror**: Added `/api/v1/tmdb/[...path]` raw content mirror with DB caching and public-content allowlist.
 - **Search**: Public search now combines local cache results with cached TMDB multi-search. Admin movie/TV search always shows extra TMDB results.
 - **Search Fixes**: Empty movie/TV searches create durable markers with approximate frequency and first/last-seen statistics. Admins can preview and select cached TMDB movie/TV candidates, dismiss no-match captures, view dismissed items separately, and restore them later.

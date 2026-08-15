@@ -178,7 +178,7 @@ TMDB media files are not stored in the database. The database keeps TMDB image p
 IP and country values come from trusted reverse-proxy headers, so nginx or your CDN must overwrite forwarded headers at the network boundary. When no country header is present, the logger can fall back to a local MaxMind GeoLite2 Country database.
 
 `RATE_LIMIT_BYPASS_IPS` accepts a comma-separated list of exact trusted client IPs. These IPs bypass the local
-per-IP and per-key request limits, but not API-key authentication or blocked-IP checks. A local 429 response uses
+per-IP request limit, but not API-key authentication or blocked-IP checks. A local 429 response uses
 `x-ratelimit-source: tmdb-service`; an upstream TMDB 429 uses `x-ratelimit-source: tmdb`. Both include `retry-after`.
 
 ### GeoIP country fallback
@@ -189,7 +189,8 @@ The downloaded MMDB is ignored by Git. The application watches it for updates, a
 
 ## API Endpoints
 
-All API endpoints require the `x-api-key` header. Rate limit: 60 requests per minute per key.
+All API endpoints require the `x-api-key` header. API keys do not have individual request limits; a separate
+120 requests-per-minute per-IP guard protects API authentication and all `/api/v1/*` routes.
 
 For TMDB-compatible content mirroring, use `/api/v1/tmdb/{tmdb_path}`. It forwards public TMDB content GET endpoints, caches successful JSON responses, and keeps TMDB's response shape. See [docs/api.md](docs/api.md).
 

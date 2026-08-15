@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { checkRequestRateLimit, rateLimitResponse } from '@/lib/ratelimit'
 import { getPosterPath } from '@/lib/tmdb'
 import { canonicalParams, getCachedTmdb, syncSearchCapture } from '@/lib/tmdb-cache'
 import { withApiUsage } from '@/lib/api-usage'
@@ -41,18 +40,11 @@ type TmdbSearchResponse = {
 async function search(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams
   const query = (searchParams.get('q') || '').trim()
-  const apiKey = req.headers.get('x-api-key') || ''
-
   if (!query) {
     return NextResponse.json(
       { error: 'Search query "q" is required' },
       { status: 400 }
     )
-  }
-
-  const rateLimit = checkRequestRateLimit(req.headers, apiKey)
-  if (!rateLimit.allowed) {
-    return rateLimitResponse(rateLimit)
   }
 
   const page = Math.max(parseInt(searchParams.get('page') || '1') || 1, 1)

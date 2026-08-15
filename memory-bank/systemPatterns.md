@@ -32,12 +32,12 @@ The application is built on **Next.js 16 (App Router)** using React Server Compo
 - **Usage Aggregate Cache**: Heavy `/admin/usage` metric/chart queries use a three-key (`24h`, `7d`, `30d`) process-local single-flight cache with one-minute freshness and stale-while-refresh behavior. The protected admin layout warms `24h` after sending a response; live log rows, pagination, filters, and blocked-IP state bypass the aggregate cache.
 - **Manual Search Mapping**: Empty cached title searches are surfaced to admins; mappings reuse `TmdbCache` under `/search/manual` and are applied at response time without changing the raw upstream cache entry.
 - **Search Capture Markers**: Unresolved searches reuse `TmdbCache` under `/search/captured`; dismissed markers suppress known no-match queries while leaving raw upstream cache entries intact.
-- **Rate Limiting**: In-memory sliding window (60 req/min per API key).
-- **Trusted Rate-Limit Bypass**: Comma-separated exact IPs can bypass the local per-IP and per-key limit layers; API authentication and blocked-IP enforcement still run. Local and upstream 429 responses are distinguished by `x-ratelimit-source`.
+- **Rate Limiting**: In-memory sliding-window abuse guard (120 req/min per client IP); API keys have no individual request limits.
+- **Trusted Rate-Limit Bypass**: Comma-separated exact IPs can bypass the local per-IP limit; API authentication and blocked-IP enforcement still run. Local and upstream 429 responses are distinguished by `x-ratelimit-source`.
 - **Request Logging**: `proxy.ts` logs proxy-generated failures and shared route wrappers log final handler responses through Next.js `after()` so analytics does not delay responses.
 - **Usage Retention**: Exact request logs are retained for 30 days and pruned once daily from the background write path; admins can also clear the table manually through a confirmed provider-native truncate action.
 - **Large-Log Analytics**: Current totals reuse hourly status/cache groupings, while P95 latency is calculated from the latest 5,000 requests in each comparison window instead of sorting the full range.
-- **API Key Auth**: Middleware validates `x-api-key` header against DB.
+- **API Key Auth**: Middleware validates `x-api-key` against the database. Keys have no per-key request limit; middleware retains a 120 requests-per-minute per-IP abuse guard.
 - **next-auth Auth**: Credentials Provider for admin login with bcrypt password hashing.
 - **Type Safety**: Zod schemas for forms, TypeScript for all logic.
 - **Tailwind + Shadcn/UI**: Consistent, accessible design system.
@@ -51,7 +51,7 @@ The application is built on **Next.js 16 (App Router)** using React Server Compo
 
 ## API Pattern
 - **Key Validation**: Middleware checks `x-api-key` header against `ApiKey` table.
-- **Rate Limiting**: In-memory Map with sliding window cleanup.
+- **Rate Limiting**: Per-IP in-memory Map with sliding-window cleanup.
 - **Lazy Sync**: If data not in DB, fetch from TMDB, upsert to DB, log sync, return data.
 - **Raw Mirror Cache**: If a TMDB mirror response is cached, return it unchanged; otherwise fetch TMDB, cache successful JSON, and return it.
 - **Pagination**: All list endpoints support `page`, `limit`, and `q` query params.
