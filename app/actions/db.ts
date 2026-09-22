@@ -29,6 +29,7 @@ import {
   isSearchCaptureSourcePath,
   SEARCH_CAPTURE_PATH,
   SEARCH_MAPPING_PATH,
+  type ManualSearchMapping,
   type SearchMediaType,
 } from '@/lib/search-mappings'
 import {
@@ -127,13 +128,79 @@ export async function deleteTvShow(tmdbId: number) {
 }
 
 // Search fixes
-export async function getSearchFixes() {
+export type SearchFixTab = 'unresolved' | 'dismissed' | 'mappings'
+export type SearchFixSort = 'frequent' | 'recent' | 'oldest' | 'query'
+
+export type SearchFixItem = {
+  query: string
+  path: string
+  capturedAt: Date
+  firstSeen: Date
+  occurrences: number
+}
+
+export type SearchFixMappingItem = ManualSearchMapping & {
+  updatedAt: Date
+}
+
+export type SearchFixesOptions = {
+  tab?: SearchFixTab
+  q?: string
+  page?: number
+  pageSize?: number
+  sort?: SearchFixSort
+}
+
+export type SearchFixesResult = {
+  counts: {
+    unresolved: number
+    dismissed: number
+    mappings: number
+  }
+  tab: SearchFixTab
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+  unresolved: SearchFixItem[]
+  dismissed: SearchFixItem[]
+  mappings: SearchFixMappingItem[]
+}
+
+export function buildSearchRedirectUrl(statusKey: string, formData?: FormData) {
+  const params = new URLSearchParams()
+  params.set(statusKey, '1')
+  if (formData) {
+    const returnTab = formData.get('returnTab')
+    const returnPage = formData.get('returnPage')
+    const returnQ = formData.get('returnQ')
+    const returnSort = formData.get('returnSort')
+    const returnPageSize = formData.get('returnPageSize')
+
+    if (returnTab && typeof returnTab === 'string') params.set('tab', returnTab)
+    if (returnPage && typeof returnPage === 'string' && returnPage !== '1') params.set('page', returnPage)
+    if (returnQ && typeof returnQ === 'string' && returnQ.trim()) params.set('q', returnQ.trim())
+    if (returnSort && typeof returnSort === 'string') params.set('sort', returnSort)
+    if (returnPageSize && typeof returnPageSize === 'string' && returnPageSize !== '50') params.set('pageSize', returnPageSize)
+  }
+  return `/admin/search?${params.toString()}`
+}
+
+export function buildSearchErrorRedirectUrl(errorMessage: string, formData?: FormData) {
+  const url = buildSearchRedirectUrl('dummy', formData)
+  const [base, query] = url.split('?')
+  const params = new URLSearchParams(query)
+  params.delete('dummy')
+  params.set('error', errorMessage)
+  return `${base}?${params.toString()}`
+}
+
+export async function getSearchFixes(options?: SearchFixesOptions): Promise<SearchFixesResult> {
   await requireAdmin()
   const [searches, captureRows, mappingRows] = await Promise.all([
     prisma.tmdbCache.findMany({
       where: { path: { in: ['/search/multi', '/search/movie', '/search/tv'] } },
-      // ponytail: scan recent cache rows; paginate if unresolved search volume grows past 500.
-      take: 500,
+      take: 100,
       orderBy: { updatedAt: 'desc' },
       select: { path: true, query: true, payload: true, updatedAt: true },
     }),
@@ -149,34 +216,22 @@ export async function getSearchFixes() {
     }),
   ])
 
-  const mappings = mappingRows.flatMap((row) => {
+  const mappings: SearchFixMappingItem[] = mappingRows.flatMap((row) => {
     const mapping = parseManualSearchMapping(row.payload)
     return mapping ? [{ ...mapping, updatedAt: row.updatedAt }] : []
   })
   const mappedQueries = new Set(mappings.map((mapping) => normalizeSearchQuery(mapping.query)))
-  const unresolved = new Map<string, {
-    query: string
-    path: string
-    capturedAt: Date
-    firstSeen: Date
-    occurrences: number
-  }>()
+  const unresolved = new Map<string, SearchFixItem>()
 
   const dismissedQueries = new Set<string>()
-  const dismissed: Array<{
-    query: string
-    path: string
-    capturedAt: Date
-    firstSeen: Date
-    occurrences: number
-  }> = []
+  const dismissed: SearchFixItem[] = []
   for (const row of captureRows) {
     const capture = parseSearchCapture(row.payload)
     if (!capture) continue
     const normalized = normalizeSearchQuery(capture.query)
     const capturedAt = capture.lastSeen ? new Date(capture.lastSeen) : row.updatedAt
     const firstSeen = capture.firstSeen ? new Date(capture.firstSeen) : row.updatedAt
-    const item = {
+    const item: SearchFixItem = {
       query: capture.query,
       path: capture.path,
       capturedAt,
@@ -213,10 +268,124 @@ export async function getSearchFixes() {
     })
   }
 
+  const allUnresolved = [...unresolved.values()]
+  const allDismissed = dismissed
+  const allMappings = mappings
+
+  const counts = {
+    unresolved: allUnresolved.length,
+    dismissed: allDismissed.length,
+    mappings: allMappings.length,
+  }
+
+  const activeTab: SearchFixTab = options?.tab && ['unresolved', 'dismissed', 'mappings'].includes(options.tab)
+    ? options.tab
+    : 'unresolved'
+
+  const defaultSort: SearchFixSort = activeTab === 'unresolved' ? 'frequent' : 'recent'
+  const sort: SearchFixSort = options?.sort && ['frequent', 'recent', 'oldest', 'query'].includes(options.sort)
+    ? options.sort
+    : defaultSort
+
+  const filterText = options?.q?.trim().toLowerCase()
+
+  let filteredUnresolved = allUnresolved
+  let filteredDismissed = allDismissed
+  let filteredMappings = allMappings
+
+  if (filterText) {
+    filteredUnresolved = allUnresolved.filter((item) =>
+      item.query.toLowerCase().includes(filterText) || item.path.toLowerCase().includes(filterText)
+    )
+    filteredDismissed = allDismissed.filter((item) =>
+      item.query.toLowerCase().includes(filterText) || item.path.toLowerCase().includes(filterText)
+    )
+    filteredMappings = allMappings.filter((item) => {
+      const title = typeof item.item?.title === 'string'
+        ? item.item.title
+        : typeof item.item?.name === 'string'
+          ? item.item.name
+          : ''
+      return (
+        item.query.toLowerCase().includes(filterText)
+        || title.toLowerCase().includes(filterText)
+        || String(item.tmdbId).includes(filterText)
+      )
+    })
+  }
+
+  const sortCaptures = (items: SearchFixItem[]) => {
+    return [...items].sort((a, b) => {
+      if (sort === 'frequent') {
+        return b.occurrences - a.occurrences || b.capturedAt.getTime() - a.capturedAt.getTime()
+      }
+      if (sort === 'recent') {
+        return b.capturedAt.getTime() - a.capturedAt.getTime()
+      }
+      if (sort === 'oldest') {
+        return a.firstSeen.getTime() - b.firstSeen.getTime()
+      }
+      if (sort === 'query') {
+        return a.query.localeCompare(b.query)
+      }
+      return 0
+    })
+  }
+
+  const sortMappings = (items: SearchFixMappingItem[]) => {
+    return [...items].sort((a, b) => {
+      if (sort === 'recent') {
+        return b.updatedAt.getTime() - a.updatedAt.getTime()
+      }
+      if (sort === 'oldest') {
+        return a.updatedAt.getTime() - b.updatedAt.getTime()
+      }
+      if (sort === 'query') {
+        return a.query.localeCompare(b.query)
+      }
+      return b.updatedAt.getTime() - a.updatedAt.getTime()
+    })
+  }
+
+  const sortedUnresolved = sortCaptures(filteredUnresolved)
+  const sortedDismissed = sortCaptures(filteredDismissed)
+  const sortedMappings = sortMappings(filteredMappings)
+
+  if (!options) {
+    return {
+      counts,
+      tab: 'unresolved',
+      page: 1,
+      pageSize: counts.unresolved || 1,
+      total: counts.unresolved,
+      totalPages: 1,
+      unresolved: sortedUnresolved,
+      dismissed: sortedDismissed,
+      mappings: sortedMappings,
+    }
+  }
+
+  const targetTotal = activeTab === 'unresolved'
+    ? sortedUnresolved.length
+    : activeTab === 'dismissed'
+      ? sortedDismissed.length
+      : sortedMappings.length
+
+  const pageSize = Math.max(10, Math.min(200, options.pageSize || 50))
+  const totalPages = Math.max(1, Math.ceil(targetTotal / pageSize))
+  const page = Math.max(1, Math.min(totalPages, options.page || 1))
+  const offset = (page - 1) * pageSize
+
   return {
-    unresolved: [...unresolved.values()].sort((a, b) => b.occurrences - a.occurrences || b.capturedAt.getTime() - a.capturedAt.getTime()),
-    dismissed,
-    mappings,
+    counts,
+    tab: activeTab,
+    page,
+    pageSize,
+    total: targetTotal,
+    totalPages,
+    unresolved: activeTab === 'unresolved' ? sortedUnresolved.slice(offset, offset + pageSize) : [],
+    dismissed: activeTab === 'dismissed' ? sortedDismissed.slice(offset, offset + pageSize) : [],
+    mappings: activeTab === 'mappings' ? sortedMappings.slice(offset, offset + pageSize) : [],
   }
 }
 
@@ -288,10 +457,10 @@ export async function saveSearchMapping(formData: FormData) {
     || !Number.isInteger(tmdbId)
     || tmdbId < 1
   ) {
-    redirect('/admin/search?error=Enter+a+search+text%2C+media+type%2C+and+valid+TMDB+ID.')
+    redirect(buildSearchErrorRedirectUrl('Enter a search text, media type, and valid TMDB ID.', formData))
   }
   if (cacheKey.length > MAX_TMDB_CACHE_KEY_LENGTH) {
-    redirect('/admin/search?error=The+search+text+is+too+long.')
+    redirect(buildSearchErrorRedirectUrl('The search text is too long.', formData))
   }
 
   type TmdbDetails = {
@@ -318,7 +487,7 @@ export async function saveSearchMapping(formData: FormData) {
   const item = details?.payload
   const title = mediaType === 'movie' ? item?.title : item?.name
   if (details?.cache === 'bypass' || item?.id !== tmdbId || !title) {
-    redirect('/admin/search?error=That+TMDB+ID+could+not+be+loaded+for+the+selected+media+type.')
+    redirect(buildSearchErrorRedirectUrl('That TMDB ID could not be loaded for the selected media type.', formData))
   }
 
   const searchItem = mediaType === 'movie'
@@ -359,7 +528,7 @@ export async function saveSearchMapping(formData: FormData) {
   })
 
   revalidatePath('/admin/search')
-  redirect('/admin/search?saved=1')
+  redirect(buildSearchRedirectUrl('saved', formData))
 }
 
 export async function deleteSearchMapping(formData: FormData) {
@@ -371,7 +540,7 @@ export async function deleteSearchMapping(formData: FormData) {
     await prisma.tmdbCache.deleteMany({ where: { cacheKey, path: SEARCH_MAPPING_PATH } })
   }
   revalidatePath('/admin/search')
-  redirect('/admin/search?deleted=1')
+  redirect(buildSearchRedirectUrl('deleted', formData))
 }
 
 // API Keys
@@ -454,7 +623,7 @@ export async function dismissSearchCapture(formData: FormData) {
   }
 
   revalidatePath('/admin/search')
-  redirect('/admin/search?dismissed=1')
+  redirect(buildSearchRedirectUrl('dismissed', formData))
 }
 
 export async function restoreSearchCapture(formData: FormData) {
@@ -473,7 +642,7 @@ export async function restoreSearchCapture(formData: FormData) {
   }
 
   revalidatePath('/admin/search')
-  redirect('/admin/search?restored=1')
+  redirect(buildSearchRedirectUrl('restored', formData))
 }
 
 export async function blockIpAddress(value: string) {
