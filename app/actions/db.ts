@@ -167,7 +167,7 @@ export type SearchFixesResult = {
   mappings: SearchFixMappingItem[]
 }
 
-export function buildSearchRedirectUrl(statusKey: string, formData?: FormData) {
+function buildSearchRedirectUrl(statusKey: string, formData?: FormData) {
   const params = new URLSearchParams()
   params.set(statusKey, '1')
   if (formData) {
@@ -186,7 +186,7 @@ export function buildSearchRedirectUrl(statusKey: string, formData?: FormData) {
   return `/admin/search?${params.toString()}`
 }
 
-export function buildSearchErrorRedirectUrl(errorMessage: string, formData?: FormData) {
+function buildSearchErrorRedirectUrl(errorMessage: string, formData?: FormData) {
   const url = buildSearchRedirectUrl('dummy', formData)
   const [base, query] = url.split('?')
   const params = new URLSearchParams(query)
