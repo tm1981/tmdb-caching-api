@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { withNetworkRetry } from './upstream-fetch.ts'
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p'
 const DEFAULT_MAX_FILE_BYTES = 25 * 1024 * 1024
@@ -76,6 +77,27 @@ function validatedRequest(size: string, mediaPath: string[]) {
   return { key, filename, extension, upstreamUrl: `${TMDB_IMAGE_BASE}/${size}/${upstreamPath}` }
 }
 
+async function downloadImage(upstreamUrl: string) {
+  const response = await fetch(upstreamUrl, {
+    cache: 'no-store',
+    redirect: 'error',
+    signal: AbortSignal.timeout(MEDIA_FETCH_TIMEOUT_MS),
+  })
+  if (!response.ok) throw new MediaUpstreamError(response.status)
+
+  const contentType = response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() || ''
+  if (!contentType.startsWith('image/')) throw new MediaUpstreamError(502)
+
+  const maxFileBytes = positiveBytes(process.env.MEDIA_CACHE_MAX_FILE_BYTES, DEFAULT_MAX_FILE_BYTES)
+  const contentLength = Number(response.headers.get('content-length'))
+  if (Number.isFinite(contentLength) && contentLength > maxFileBytes) throw new MediaUpstreamError(413)
+
+  const body = Buffer.from(await response.arrayBuffer())
+  if (body.length > maxFileBytes) throw new MediaUpstreamError(413)
+
+  return { body, contentType }
+}
+
 async function fetchAndStore(
   filename: string,
   extension: string,
@@ -94,22 +116,8 @@ async function fetchAndStore(
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
 
-  const response = await fetch(upstreamUrl, {
-    cache: 'no-store',
-    redirect: 'error',
-    signal: AbortSignal.timeout(MEDIA_FETCH_TIMEOUT_MS),
-  })
-  if (!response.ok) throw new MediaUpstreamError(response.status)
-
-  const contentType = response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() || ''
-  if (!contentType.startsWith('image/')) throw new MediaUpstreamError(502)
-
-  const maxFileBytes = positiveBytes(process.env.MEDIA_CACHE_MAX_FILE_BYTES, DEFAULT_MAX_FILE_BYTES)
-  const contentLength = Number(response.headers.get('content-length'))
-  if (Number.isFinite(contentLength) && contentLength > maxFileBytes) throw new MediaUpstreamError(413)
-
-  const body = Buffer.from(await response.arrayBuffer())
-  if (body.length > maxFileBytes) throw new MediaUpstreamError(413)
+  // TMDB's image CDN occasionally resets connections; one retry covers the whole download.
+  const { body, contentType } = await withNetworkRetry(() => downloadImage(upstreamUrl))
 
   await mkdir(directory, { recursive: true })
   const temporary = path.join(directory, `.${filename}.${randomUUID()}.tmp`)

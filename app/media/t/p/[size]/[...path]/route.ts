@@ -8,6 +8,7 @@ import {
   MediaUpstreamError,
   trimMediaCache,
 } from '@/lib/media-cache'
+import { describeNetworkError, isNetworkError, networkErrorStatus } from '@/lib/upstream-fetch'
 
 const CACHE_CONTROL = 'public, max-age=31536000, immutable'
 
@@ -40,6 +41,13 @@ export async function GET(
       return NextResponse.json(
         { error: 'TMDB image is unavailable.' },
         { status: error.status, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    if (isNetworkError(error)) {
+      console.warn(`Media fetch failed for ${size}/${path.join('/')}: ${describeNetworkError(error)}`)
+      return NextResponse.json(
+        { error: 'TMDB image server could not be reached.' },
+        { status: networkErrorStatus(error), headers: { 'cache-control': 'no-store' } },
       )
     }
 

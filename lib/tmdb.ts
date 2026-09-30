@@ -1,3 +1,10 @@
+import {
+  describeNetworkError,
+  isNetworkError,
+  networkErrorStatus,
+  withNetworkRetry,
+} from './upstream-fetch.ts'
+
 const TMDB_BASE = 'https://api.themoviedb.org/3'
 const API_KEY = process.env.TMDB_API_KEY!
 // Fail fast instead of holding API requests open when TMDB stalls.
@@ -19,26 +26,46 @@ export class TmdbApiError extends Error {
   }
 }
 
+// Reads the whole body inside the retry so a connection reset mid-response is retried too.
+function fetchTmdb(url: URL) {
+  return withNetworkRetry(async () => {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        Accept: 'application/json',
+      },
+      next: { revalidate: 0 },
+      signal: AbortSignal.timeout(TMDB_TIMEOUT_MS),
+    })
+    return { res, body: await res.text() }
+  })
+}
+
+function logUnreachable(endpoint: string, error: unknown) {
+  console.warn(`TMDB request failed for ${endpoint}: ${describeNetworkError(error)}`)
+}
+
 async function tmdbRequest<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
   const url = new URL(`${TMDB_BASE}${endpoint}`)
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value)
   }
 
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-      Accept: 'application/json',
-    },
-    next: { revalidate: 0 },
-    signal: AbortSignal.timeout(TMDB_TIMEOUT_MS),
-  })
+  let response: Awaited<ReturnType<typeof fetchTmdb>>
+  try {
+    response = await fetchTmdb(url)
+  } catch (error) {
+    if (!isNetworkError(error)) throw error
+    logUnreachable(endpoint, error)
+    throw new TmdbApiError(networkErrorStatus(error), null, `unreachable: ${describeNetworkError(error)}`)
+  }
 
+  const { res, body } = response
   if (!res.ok) {
     throw new TmdbApiError(res.status, res.headers.get('retry-after'), res.statusText)
   }
 
-  return res.json()
+  return JSON.parse(body)
 }
 
 export async function tmdbRawRequest(endpoint: string, params: URLSearchParams) {
@@ -47,15 +74,28 @@ export async function tmdbRawRequest(endpoint: string, params: URLSearchParams) 
     url.searchParams.append(key, value)
   }
 
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-      Accept: 'application/json',
-    },
-    next: { revalidate: 0 },
-    signal: AbortSignal.timeout(TMDB_TIMEOUT_MS),
-  })
-  const payload = await res.json().catch(() => ({ status_message: res.statusText }))
+  let response: Awaited<ReturnType<typeof fetchTmdb>>
+  try {
+    response = await fetchTmdb(url)
+  } catch (error) {
+    if (!isNetworkError(error)) throw error
+    logUnreachable(endpoint, error)
+    return {
+      ok: false,
+      status: networkErrorStatus(error),
+      payload: { success: false, status_message: 'TMDB could not be reached. Try again later.' },
+      retryAfter: null,
+    }
+  }
+
+  const { res, body } = response
+  // Arbitrary TMDB JSON, typed like the res.json() result callers already rely on.
+  let payload: any
+  try {
+    payload = JSON.parse(body)
+  } catch {
+    payload = { status_message: res.statusText }
+  }
 
   return { ok: res.ok, status: res.status, payload, retryAfter: res.headers.get('retry-after') }
 }

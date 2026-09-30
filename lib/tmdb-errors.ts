@@ -15,6 +15,9 @@ export function tmdbFetchErrorResponse(error: unknown, label: string) {
         { status: 429, headers: { ...headers, 'x-ratelimit-source': 'tmdb', 'retry-after': error.retryAfter || '60' } },
       )
     }
+    if (error.status === 504) {
+      return NextResponse.json({ error: `TMDB timed out fetching ${label.toLowerCase()}` }, { status: 504, headers })
+    }
     return NextResponse.json(
       { error: `Failed to fetch ${label.toLowerCase()} from TMDB: upstream status ${error.status}` },
       { status: 502, headers },
