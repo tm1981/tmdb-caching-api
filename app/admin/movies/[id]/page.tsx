@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import prisma from '@/lib/prisma'
-import { getPosterPath, getBackdropPath, getMovieDetails, extractMovieData } from '@/lib/tmdb'
+import { getPosterPath, getBackdropPath, getMovieDetails, extractMovieData, TmdbApiError } from '@/lib/tmdb'
 import { getTmdbCacheInfo } from '@/lib/tmdb-cache'
 import { scheduleCachedDataLimitEnforcement } from '@/lib/cache-limit'
 import { formatRating, formatDate } from '@/lib/utils'
@@ -57,7 +57,12 @@ async function getMovie(tmdbId: number) {
 
     return movie
   } catch (error) {
-    console.error(`Failed to lazy-sync movie ${tmdbId}`, error)
+    // A TMDB 404 is an ordinary "not found" (the page renders notFound()); only log real failures.
+    if (error instanceof TmdbApiError) {
+      if (error.status !== 404) console.warn(`Failed to lazy-sync movie ${tmdbId}: ${error.message}`)
+    } else {
+      console.error(`Failed to lazy-sync movie ${tmdbId}`, error)
+    }
     return null
   }
 }

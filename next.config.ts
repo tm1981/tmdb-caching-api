@@ -12,6 +12,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['192.168.1.217'],
   poweredByHeader: false,
+  // The reverse proxy/CDN compresses responses; Next's own gzip only adds CPU work and
+  // emits MaxListenersExceededWarning on large streamed responses.
+  compress: false,
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }]
   },
