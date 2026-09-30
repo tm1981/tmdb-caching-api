@@ -16,3 +16,9 @@ export function tmdbEndpoint(path: string[]) {
   }
   return { segments, endpoint: `/${segments.join('/')}` }
 }
+
+export function parseTmdbId(value: string) {
+  if (!/^\d{1,10}$/.test(value)) return null
+  const id = Number(value)
+  return Number.isSafeInteger(id) && id > 0 ? id : null
+}

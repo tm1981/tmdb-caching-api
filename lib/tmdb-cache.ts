@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client'
+import { after } from 'next/server'
 import prisma from '@/lib/prisma'
 import { tmdbRawRequest } from '@/lib/tmdb'
 import { retryPrismaUniqueConflict } from '@/lib/prisma-conflict'
@@ -88,6 +89,22 @@ export async function syncSearchCapture(endpoint: string, query: string, payload
     },
   })
   if (!existing) scheduleSearchCaptureLimitEnforcement()
+}
+
+// Records search outcomes for Admin > Search Fixes after the response is sent. Queries with a
+// manual mapping are skipped (Search Fixes hides them), and a cached resolved payload already
+// cleared its capture when it was first fetched.
+export function queueSearchCapture(
+  endpoint: string,
+  query: string,
+  payload: unknown,
+  cache: 'hit' | 'miss',
+  hasMapping: boolean,
+) {
+  if (hasMapping || (cache === 'hit' && !isUnresolvedSearchPayload(endpoint, payload))) return
+  after(() => syncSearchCapture(endpoint, query, payload).catch(error => {
+    console.warn('Search capture failed:', error)
+  }))
 }
 
 export async function setSearchCaptureDismissed(endpoint: string, query: string, dismissed: boolean) {

@@ -1,5 +1,7 @@
 const TMDB_BASE = 'https://api.themoviedb.org/3'
 const API_KEY = process.env.TMDB_API_KEY!
+// Fail fast instead of holding API requests open when TMDB stalls.
+const TMDB_TIMEOUT_MS = 10_000
 
 export class TmdbApiError extends Error {
   readonly status: number
@@ -29,6 +31,7 @@ async function tmdbRequest<T>(endpoint: string, params: Record<string, string> =
       Accept: 'application/json',
     },
     next: { revalidate: 0 },
+    signal: AbortSignal.timeout(TMDB_TIMEOUT_MS),
   })
 
   if (!res.ok) {
@@ -50,6 +53,7 @@ export async function tmdbRawRequest(endpoint: string, params: URLSearchParams) 
       Accept: 'application/json',
     },
     next: { revalidate: 0 },
+    signal: AbortSignal.timeout(TMDB_TIMEOUT_MS),
   })
   const payload = await res.json().catch(() => ({ status_message: res.statusText }))
 

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getPosterPath } from '@/lib/tmdb'
-import { canonicalParams, getCachedTmdb, syncSearchCapture } from '@/lib/tmdb-cache'
+import { canonicalParams, getCachedTmdb, queueSearchCapture } from '@/lib/tmdb-cache'
 import { withApiUsage } from '@/lib/api-usage'
 import {
   applyManualSearchMapping,
@@ -109,11 +109,11 @@ async function search(req: NextRequest) {
       : Promise.resolve(null),
   ])
 
+  const manualMapping = parseManualSearchMapping(mappingRow?.payload)
   if (tmdb.cache !== 'bypass') {
-    await syncSearchCapture('/search/multi', query, tmdb.payload)
+    queueSearchCapture('/search/multi', query, tmdb.payload, tmdb.cache, Boolean(manualMapping))
   }
 
-  const manualMapping = parseManualSearchMapping(mappingRow?.payload)
   const tmdbPayload = applyManualSearchMapping(tmdb.payload, manualMapping) as TmdbSearchResponse
   const tmdbResults = tmdbPayload.results || []
   const tmdbMovies = tmdbResults.filter((item) => item.media_type === 'movie')

@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
-import { PrismaClient } from '@prisma/client'
 import { hashApiKey } from '@/lib/api-keys'
-import { createPrismaAdapter } from '@/lib/database-provider'
 import { queueProxyUsage, usageRequestHeaders } from '@/lib/api-usage'
 import { validIpAddress } from '@/lib/ip-address'
+import prisma from '@/lib/prisma'
 import { clientIp } from '@/lib/usage'
 
-const prisma = new PrismaClient({ adapter: createPrismaAdapter() })
 const BLOCKED_IP_CACHE_MS = 5000
 let blockedIps = new Set<string>()
 let blockedIpsExpireAt = 0

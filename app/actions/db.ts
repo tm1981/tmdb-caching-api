@@ -859,7 +859,7 @@ export async function syncTrendingMovies() {
   await prisma.syncLog.create({
     data: {
       type: 'bulk',
-      status: 'success',
+      status: errors ? (success ? 'partial' : 'error') : 'success',
       detail: `Synced ${success} trending movies (${errors} errors)`,
     },
   })
@@ -895,7 +895,7 @@ export async function syncTrendingTv() {
   await prisma.syncLog.create({
     data: {
       type: 'bulk',
-      status: 'success',
+      status: errors ? (success ? 'partial' : 'error') : 'success',
       detail: `Synced ${success} trending TV shows (${errors} errors)`,
     },
   })
@@ -931,7 +931,7 @@ export async function syncTopRatedMovies() {
   await prisma.syncLog.create({
     data: {
       type: 'bulk',
-      status: 'success',
+      status: errors ? (success ? 'partial' : 'error') : 'success',
       detail: `Synced ${success} top rated movies (${errors} errors)`,
     },
   })
@@ -967,7 +967,7 @@ export async function syncTopRatedTv() {
   await prisma.syncLog.create({
     data: {
       type: 'bulk',
-      status: 'success',
+      status: errors ? (success ? 'partial' : 'error') : 'success',
       detail: `Synced ${success} top rated TV shows (${errors} errors)`,
     },
   })

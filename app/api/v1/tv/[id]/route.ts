@@ -2,18 +2,21 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getTvDetails, extractTvDataFull, TmdbApiError } from '@/lib/tmdb'
+import { getTvDetails, extractTvDataFull } from '@/lib/tmdb'
 import { withApiUsage } from '@/lib/api-usage'
 import { scheduleCachedDataLimitEnforcement } from '@/lib/cache-limit'
+import { retryPrismaUniqueConflict } from '@/lib/prisma-conflict'
+import { tmdbFetchErrorResponse } from '@/lib/tmdb-errors'
+import { parseTmdbId } from '@/lib/tmdb-path'
 
 async function getTvShow(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const tmdbId = parseInt(id)
+  const tmdbId = parseTmdbId(id)
 
-  if (isNaN(tmdbId)) {
+  if (!tmdbId) {
     return NextResponse.json({ error: 'Invalid TV show ID' }, { status: 400 })
   }
 
@@ -24,39 +27,30 @@ async function getTvShow(
 
   if (!tvShow) {
     cacheStatus = 'miss'
+    let data: Awaited<ReturnType<typeof getTvDetails>>
+    let tvData: Awaited<ReturnType<typeof extractTvDataFull>>
     try {
-      const data = await getTvDetails(tmdbId)
-      const tvData = await extractTvDataFull(data, tmdbId)
-
-      tvShow = await prisma.tvShow.create({
-        data: tvData,
-      })
-      scheduleCachedDataLimitEnforcement()
-
-      await prisma.syncLog.create({
-        data: {
-          type: 'tv',
-          tmdbId: data.id,
-          status: 'success',
-          detail: `Lazy-synced TV show: ${data.name}`,
-        },
-      })
-    } catch (error: any) {
-      const upstreamLimit = error instanceof TmdbApiError && error.status === 429
-      return NextResponse.json(
-        { error: `Failed to fetch TV show from TMDB: ${error.message}` },
-        {
-          status: upstreamLimit ? 429 : 502,
-          headers: {
-            'x-tmdb-cache': 'bypass',
-            ...(upstreamLimit && {
-              'x-ratelimit-source': 'tmdb',
-              'retry-after': error.retryAfter || '60',
-            }),
-          },
-        }
-      )
+      data = await getTvDetails(tmdbId)
+      tvData = await extractTvDataFull(data, tmdbId)
+    } catch (error) {
+      return tmdbFetchErrorResponse(error, 'TV show')
     }
+
+    // Concurrent requests for the same uncached show race to insert; the loser reads the winner's row.
+    tvShow = await retryPrismaUniqueConflict(
+      () => prisma.tvShow.create({ data: tvData }),
+      () => prisma.tvShow.findUniqueOrThrow({ where: { tmdbId: tvData.tmdbId } }),
+    )
+    scheduleCachedDataLimitEnforcement()
+
+    await prisma.syncLog.create({
+      data: {
+        type: 'tv',
+        tmdbId: data.id,
+        status: 'success',
+        detail: `Lazy-synced TV show: ${data.name}`,
+      },
+    }).catch(error => console.warn('Sync log write failed:', error))
   }
 
   // Mirror TMDB API response format

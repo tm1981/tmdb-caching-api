@@ -6,7 +6,7 @@ import { tmdbRawRequest } from '@/lib/tmdb'
 import { tmdbEndpoint } from '@/lib/tmdb-path'
 import { withApiUsage } from '@/lib/api-usage'
 import { withLocalMediaConfiguration } from '@/lib/media-cache'
-import { syncSearchCapture, upsertTmdbCache } from '@/lib/tmdb-cache'
+import { queueSearchCapture, upsertTmdbCache } from '@/lib/tmdb-cache'
 import {
   applyManualSearchMapping,
   manualSearchCacheKey,
@@ -114,8 +114,8 @@ async function getTmdb(
   if (!refresh) {
     const cached = await prisma.tmdbCache.findUnique({ where: { cacheKey } })
     if (cached) {
-      if (mappedSearch) await syncSearchCapture(endpoint, searchText, cached.payload)
       const mapping = parseManualSearchMapping((await mappingPromise)?.payload)
+      if (mappedSearch) queueSearchCapture(endpoint, searchText, cached.payload, 'hit', Boolean(mapping))
       return NextResponse.json(responsePayload(applyManualSearchMapping(cached.payload, mapping, expectedMediaType)), {
         status: cached.status,
         headers: tmdbSearchResponseHeaders('hit', mapping, expectedMediaType),
@@ -134,10 +134,10 @@ async function getTmdb(
       status: result.status,
       payload: result.payload,
     })
-    if (mappedSearch) await syncSearchCapture(endpoint, searchText, result.payload)
   }
 
   const mapping = parseManualSearchMapping((await mappingPromise)?.payload)
+  if (result.ok && mappedSearch) queueSearchCapture(endpoint, searchText, result.payload, 'miss', Boolean(mapping))
   return NextResponse.json(responsePayload(applyManualSearchMapping(result.payload, mapping, expectedMediaType)), {
     status: result.status,
     headers: {

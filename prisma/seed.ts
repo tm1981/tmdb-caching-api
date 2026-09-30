@@ -9,8 +9,9 @@ const prisma = new PrismaClient({
 })
 
 async function main() {
-  const username = process.env.ADMIN_USERNAME || 'admin@example.com'
-  const password = process.env.ADMIN_PASSWORD || 'admin123'
+  // Login lowercases the submitted username, so store it the same way.
+  const username = (process.env.ADMIN_USERNAME || 'admin@example.com').trim().toLowerCase()
+  const password = process.env.ADMIN_PASSWORD
 
   const existing = await prisma.user.findUnique({
     where: { username },
@@ -45,6 +46,10 @@ async function main() {
     })
     console.log(`Admin user updated: ${username}`)
     return
+  }
+
+  if (!password) {
+    throw new Error('Set ADMIN_PASSWORD before seeding the first admin user.')
   }
 
   const hashedPassword = await hash(password, 12)

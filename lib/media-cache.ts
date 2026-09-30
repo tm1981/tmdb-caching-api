@@ -9,6 +9,7 @@ const TRIM_LOW_WATERMARK = 0.9
 const MIN_TRIM_INTERVAL_MS = 5 * 60 * 1000
 const EMERGENCY_OVERAGE_FACTOR = 1.1
 const FILE_STAT_CONCURRENCY = 16
+const MEDIA_FETCH_TIMEOUT_MS = 30_000
 const inflight = new Map<string, Promise<CachedMedia>>()
 let trimPromise: Promise<void> | null = null
 let knownCacheBytes: number | null = null
@@ -93,7 +94,11 @@ async function fetchAndStore(
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
 
-  const response = await fetch(upstreamUrl, { cache: 'no-store', redirect: 'error' })
+  const response = await fetch(upstreamUrl, {
+    cache: 'no-store',
+    redirect: 'error',
+    signal: AbortSignal.timeout(MEDIA_FETCH_TIMEOUT_MS),
+  })
   if (!response.ok) throw new MediaUpstreamError(response.status)
 
   const contentType = response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() || ''
