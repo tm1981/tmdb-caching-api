@@ -179,7 +179,7 @@ Disposable database cache rows are capped by `TMDB_CACHE_MAX_ROWS` (default `100
 
 TMDB media files are not stored in the database. The database keeps TMDB image path strings, while the media proxy stores requested files separately on disk under `data/media` with its own `MEDIA_CACHE_MAX_BYTES` limit. The proxy tracks cache growth in memory, scans files with bounded concurrency only when needed, and trims to 90% of the limit so a full directory scan is not repeated after every new image. Clearing the database cache does not clear this disk media cache; omit `data/media` from a lean backup or clear that directory separately while the app is stopped.
 
-IP and country values come from trusted reverse-proxy headers, so nginx or your CDN must overwrite forwarded headers at the network boundary. Client IPs (used for logging, IP blocking, and login throttling) are read from the `X-Forwarded-For` entry appended by the outermost trusted proxy, counted from the right: set `TRUSTED_PROXY_COUNT=1` (default) for nginx only, or `2` for a CDN in front of nginx. Entries a client adds to the left are ignored. When no country header is present, the logger can fall back to a local MaxMind GeoLite2 Country database.
+IP and country values come from trusted reverse-proxy headers. Client IPs (used for logging, IP blocking, and login throttling) are read from the `X-Forwarded-For` entry added by your outermost trusted proxy, counting from the right; set `TRUSTED_PROXY_COUNT` to match your proxy setup (see [Reverse Proxy and Client IPs](#reverse-proxy-and-client-ips)). When no country header is present, the logger can fall back to a local MaxMind GeoLite2 Country database.
 
 ### GeoIP country fallback
 
@@ -304,6 +304,89 @@ PORT=3000 npm run start
 ```
 
 The app uses the normal Next.js production server via `next start`. Set `NEXTAUTH_URL` to the public HTTPS domain in production.
+
+## Reverse Proxy and Client IPs
+
+The client IP is used for request logs, IP blocking, and login throttling. Clients can put anything at the start of the `X-Forwarded-For` header, so the app ignores those entries. It counts `TRUSTED_PROXY_COUNT` entries in from the right end of the header and uses that one: the address added by your outermost trusted proxy.
+
+| Setup | `X-Forwarded-For` reaching the app | `TRUSTED_PROXY_COUNT` |
+|---|---|---|
+| Caddy only | `client` | `1` (default) |
+| nginx only | `…, client` | `1` (default) |
+| Cloudflare → Caddy with Cloudflare `trusted_proxies` | `…, client, cloudflare-edge` | `2` |
+| Cloudflare → nginx | `…, client, cloudflare-edge` | `2` |
+
+With Caddy, a request that skips the CDN and reaches the server directly is still identified correctly. Caddy doesn't trust it, so it forwards only the caller's real IP. nginx passes on whatever the client sent, so with a CDN in front of nginx, only accept connections from the CDN's IP ranges (firewall or `allow`/`deny`). Otherwise a direct request can set a fake IP.
+
+### Caddy only
+
+Caddy ignores `X-Forwarded-For` values from untrusted clients and sends the real connecting IP, so no extra settings are needed:
+
+```caddy
+tmdb.example.com {
+	reverse_proxy 127.0.0.1:3000
+}
+```
+
+```env
+TRUSTED_PROXY_COUNT=1
+```
+
+### Cloudflare in front of Caddy
+
+List Cloudflare's IP ranges as trusted proxies so Caddy keeps the client IP that Cloudflare added and appends the Cloudflare edge IP after it. Keep the ranges in sync with <https://www.cloudflare.com/ips/>:
+
+```caddy
+{
+	servers {
+		trusted_proxies static \
+			173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 \
+			103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 \
+			190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 \
+			198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 \
+			104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 \
+			2400:cb00::/32 2606:4700::/32 2803:f800::/32 \
+			2405:b500::/32 2405:8100::/32 2a06:98c0::/29 \
+			2c0f:f248::/32
+		# Optional: these only affect Caddy's own logs and matchers, not what the app receives.
+		trusted_proxies_strict
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+	}
+}
+
+tmdb.example.com {
+	reverse_proxy 127.0.0.1:3000
+}
+```
+
+```env
+TRUSTED_PROXY_COUNT=2
+```
+
+Without `trusted_proxies`, Caddy drops Cloudflare's header and every visitor appears as a Cloudflare edge IP, whatever `TRUSTED_PROXY_COUNT` is set to.
+
+### nginx
+
+```nginx
+location / {
+	proxy_pass http://127.0.0.1:3000;
+	proxy_set_header Host $host;
+	proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+	proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+Use `TRUSTED_PROXY_COUNT=1` for nginx alone, or `2` when a CDN sits in front of nginx (and restrict the server to the CDN's IP ranges, as described above).
+
+### Verify
+
+After deploying, send a request with a fake forwarded IP:
+
+```bash
+curl -H "x-api-key: <your key>" -H "X-Forwarded-For: 1.2.3.4" "https://tmdb.example.com/api/v1/movies?limit=1"
+```
+
+**Admin > Usage & Logs** should show your real public IP for that request. `1.2.3.4` means the count is too high. A Cloudflare address such as `104.x` or `172.64–71.x` means the count is too low or `trusted_proxies` is missing.
 
 ## Lazy Sync
 
