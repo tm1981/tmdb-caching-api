@@ -50,9 +50,22 @@ export function sanitizeQuery(input: URLSearchParams | string) {
   return params.toString().slice(0, 4096)
 }
 
+function trustedProxyCount() {
+  const parsed = Number(process.env.TRUSTED_PROXY_COUNT)
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : 1
+}
+
+// Clients can prepend anything to X-Forwarded-For, so only the entry appended by the
+// outermost trusted proxy (counting from the right) identifies the real client.
 export function clientIp(headers: Headers) {
+  const forwarded = headers.get('x-forwarded-for')
+    ?.split(',')
+    .map(part => part.trim())
+    .filter(Boolean) || []
+  const hops = trustedProxyCount()
+
   return (
-    headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    forwarded[Math.max(0, forwarded.length - hops)]
     || headers.get('x-real-ip')?.trim()
     || 'unknown'
   ).slice(0, 45)

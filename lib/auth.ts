@@ -5,49 +5,71 @@ import { compare } from 'bcryptjs'
 import { createHash, randomInt, timingSafeEqual } from 'crypto'
 import nodemailer from 'nodemailer'
 import prisma from '@/lib/prisma'
+import { clientIp } from '@/lib/usage'
 
 type SessionUser = {
   id?: string | null
   role?: string | null
 }
 
+type RequestHeaders = Headers | Record<string, string | string[] | undefined>
+
 const TWO_FACTOR_TTL_MS = 10 * 60 * 1000
+const TWO_FACTOR_MAX_ATTEMPTS = 5
 const LOGIN_WINDOW_MS = 15 * 60 * 1000
 const LOGIN_MAX_ATTEMPTS = 8
+// Caps guesses against one account even when an attacker rotates source IPs.
+const ACCOUNT_MAX_ATTEMPTS = 30
+const PRUNE_THRESHOLD = 10_000
 
 // ponytail: in-memory 2FA works for one app server; move to DB/Redis when running multiple instances.
-const twoFactorCodes = new Map<string, { codeHash: string; expiresAt: number }>()
+const twoFactorCodes = new Map<string, { codeHash: string; expiresAt: number; attempts: number }>()
 // ponytail: in-memory login throttle is enough for one PM2 process; use Redis if clustering.
 const loginAttempts = new Map<string, { count: number; resetAt: number }>()
 
-function getHeader(headers: Headers | Record<string, string | string[] | undefined>, key: string) {
-  if (headers instanceof Headers) return headers.get(key)
-  const value = headers[key] || headers[key.toLowerCase()]
-  return Array.isArray(value) ? value[0] : value
-}
-
-function loginKey(headers: Headers | Record<string, string | string[] | undefined>, username: string) {
-  const forwarded = getHeader(headers, 'x-forwarded-for')?.split(',')[0]?.trim()
-  const ip = forwarded || getHeader(headers, 'x-real-ip') || 'unknown'
-  return `${ip}:${username}`
-}
-
-function checkLoginLimit(key: string) {
-  const now = Date.now()
-  const entry = loginAttempts.get(key)
-
-  if (!entry || entry.resetAt <= now) {
-    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS })
-    return true
+function toHeaders(headers: RequestHeaders) {
+  if (headers instanceof Headers) return headers
+  const result = new Headers()
+  for (const [key, value] of Object.entries(headers)) {
+    if (value !== undefined) result.set(key, Array.isArray(value) ? value.join(', ') : value)
   }
+  return result
+}
 
-  if (entry.count >= LOGIN_MAX_ATTEMPTS) return false
-  entry.count++
+function loginKeys(headers: RequestHeaders, username: string) {
+  return [`ip:${clientIp(toHeaders(headers))}:${username}`, `account:${username}`]
+}
+
+function pruneExpired<T>(map: Map<string, T>, expiresAt: (value: T) => number) {
+  if (map.size < PRUNE_THRESHOLD) return
+  const now = Date.now()
+  for (const [key, value] of map) {
+    if (expiresAt(value) <= now) map.delete(key)
+  }
+}
+
+function checkLoginLimit(keys: string[]) {
+  const now = Date.now()
+  pruneExpired(loginAttempts, entry => entry.resetAt)
+
+  const limits = keys.map(key => key.startsWith('account:') ? ACCOUNT_MAX_ATTEMPTS : LOGIN_MAX_ATTEMPTS)
+  const entries = keys.map(key => {
+    const entry = loginAttempts.get(key)
+    return entry && entry.resetAt > now ? entry : null
+  })
+
+  if (entries.some((entry, index) => entry && entry.count >= limits[index])) return false
+
+  keys.forEach((key, index) => {
+    const entry = entries[index]
+    if (entry) entry.count++
+    else loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS })
+  })
   return true
 }
 
-function clearLoginLimit(key: string) {
-  loginAttempts.delete(key)
+function clearLoginLimit(keys: string[]) {
+  for (const key of keys) loginAttempts.delete(key)
 }
 
 function hashCode(username: string, code: string) {
@@ -62,11 +84,18 @@ function codeMatches(expectedHash: string, username: string, code: string) {
   return actual.length === expected.length && timingSafeEqual(actual, expected)
 }
 
-async function sendTwoFactorCode(email: string, code: string) {
-  console.log(`2FA code for ${email}: ${code}`)
+// Codes are only printed when email cannot deliver them, and never in production unless
+// the operator explicitly opts in; otherwise anyone with log access could bypass 2FA.
+function logUndeliveredCode(email: string, code: string) {
+  if (process.env.NODE_ENV !== 'production' || process.env.TWO_FACTOR_CONSOLE_FALLBACK === 'true') {
+    console.log(`2FA code for ${email}: ${code}`)
+  }
+}
 
+async function sendTwoFactorCode(email: string, code: string) {
   if (!process.env.SMTP_HOST || !process.env.SMTP_FROM) {
     console.warn('2FA email not sent: SMTP_HOST and SMTP_FROM are not configured.')
+    logUndeliveredCode(email, code)
     return
   }
 
@@ -91,6 +120,7 @@ async function sendTwoFactorCode(email: string, code: string) {
     })
   } catch (error) {
     console.warn('2FA email not sent:', error)
+    logUndeliveredCode(email, code)
   }
 }
 
@@ -109,8 +139,8 @@ export const authOptions: NextAuthOptions = {
         }
 
         const username = credentials.username.toLowerCase()
-        const throttleKey = loginKey(req.headers || {}, username)
-        if (!checkLoginLimit(throttleKey)) return null
+        const throttleKeys = loginKeys(req.headers || {}, username)
+        if (!checkLoginLimit(throttleKeys)) return null
 
         const user = await prisma.user.findUnique({
           where: { username },
@@ -131,15 +161,20 @@ export const authOptions: NextAuthOptions = {
             codeMatches(savedCode.codeHash, username, credentials.twoFactorCode)
           ) {
             twoFactorCodes.delete(username)
-            clearLoginLimit(throttleKey)
+            clearLoginLimit(throttleKeys)
           } else {
+            // A code dies after a few wrong guesses so the 6-digit space cannot be brute-forced.
+            savedCode.attempts++
+            if (savedCode.attempts >= TWO_FACTOR_MAX_ATTEMPTS) twoFactorCodes.delete(username)
             return null
           }
         } else {
           const code = randomInt(100000, 1000000).toString()
+          pruneExpired(twoFactorCodes, entry => entry.expiresAt)
           twoFactorCodes.set(username, {
             codeHash: hashCode(username, code),
             expiresAt: Date.now() + TWO_FACTOR_TTL_MS,
+            attempts: 0,
           })
           await sendTwoFactorCode(username, code)
           throw new Error('TwoFactorRequired')

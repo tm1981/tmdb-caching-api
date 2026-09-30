@@ -62,7 +62,10 @@ SMTP_PORT=587
 SMTP_USER=your_smtp_username
 SMTP_PASSWORD=your_smtp_password
 SMTP_FROM="TMDB Service <no-reply@example.com>"
+TRUSTED_PROXY_COUNT=1
 ```
+
+Login 2FA codes are emailed through SMTP. If delivery fails, the code is printed to the server log only outside production; set `TWO_FACTOR_CONSOLE_FALLBACK=true` to allow that in production (anyone who can read the logs can then pass 2FA).
 
 Database URL examples:
 
@@ -174,7 +177,7 @@ Disposable database cache rows are capped by `TMDB_CACHE_MAX_ROWS` (default `100
 
 TMDB media files are not stored in the database. The database keeps TMDB image path strings, while the media proxy stores requested files separately on disk under `data/media` with its own `MEDIA_CACHE_MAX_BYTES` limit. The proxy tracks cache growth in memory, scans files with bounded concurrency only when needed, and trims to 90% of the limit so a full directory scan is not repeated after every new image. Clearing the database cache does not clear this disk media cache; omit `data/media` from a lean backup or clear that directory separately while the app is stopped.
 
-IP and country values come from trusted reverse-proxy headers, so nginx or your CDN must overwrite forwarded headers at the network boundary. When no country header is present, the logger can fall back to a local MaxMind GeoLite2 Country database.
+IP and country values come from trusted reverse-proxy headers, so nginx or your CDN must overwrite forwarded headers at the network boundary. Client IPs (used for logging, IP blocking, and login throttling) are read from the `X-Forwarded-For` entry appended by the outermost trusted proxy, counted from the right: set `TRUSTED_PROXY_COUNT=1` (default) for nginx only, or `2` for a CDN in front of nginx. Entries a client adds to the left are ignored. When no country header is present, the logger can fall back to a local MaxMind GeoLite2 Country database.
 
 ### GeoIP country fallback
 

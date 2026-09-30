@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { getCachedTmdb } from '@/lib/tmdb-cache'
+import { tmdbEndpoint } from '@/lib/tmdb-path'
 import { Badge } from '@/components/ui/badge'
 
 const BLOCKED_ROOTS = new Set(['account', 'authentication', 'guest_session', 'list'])
@@ -17,12 +18,11 @@ export default async function RawTmdbPage({
 }) {
   const { path } = await params
   const query = await searchParams
-  const cleanPath = path.map(decodeURIComponent).filter(Boolean)
-  const root = cleanPath[0]
+  const validated = tmdbEndpoint(path)
 
-  if (!root || BLOCKED_ROOTS.has(root)) notFound()
+  if (!validated || BLOCKED_ROOTS.has(validated.segments[0])) notFound()
 
-  const endpoint = `/${cleanPath.map(encodeURIComponent).join('/')}`
+  const { endpoint } = validated
   const paramsObject = Object.fromEntries(
     Object.entries(query)
       .filter((entry): entry is [string, string | string[]] => entry[1] !== undefined)

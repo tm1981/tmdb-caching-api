@@ -40,7 +40,7 @@ export default function LoginPage() {
 
     if (result?.error === 'TwoFactorRequired') {
       setNeedsCode(true)
-      toast.success('Check your email or server console for the login code')
+      toast.success('Check your email for the login code')
       return
     }
 

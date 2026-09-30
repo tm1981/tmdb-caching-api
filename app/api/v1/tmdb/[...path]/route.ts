@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { tmdbRawRequest } from '@/lib/tmdb'
+import { tmdbEndpoint } from '@/lib/tmdb-path'
 import { withApiUsage } from '@/lib/api-usage'
 import { withLocalMediaConfiguration } from '@/lib/media-cache'
 import { syncSearchCapture, upsertTmdbCache } from '@/lib/tmdb-cache'
@@ -71,16 +72,16 @@ async function getTmdb(
   { params }: { params: Promise<{ path: string[] }> },
 ) {
   const { path } = await params
-  const cleanPath = path.map(segment => decodeURIComponent(segment)).filter(Boolean)
+  const validated = tmdbEndpoint(path)
 
-  if (!isAllowedPath(cleanPath)) {
+  if (!validated || !isAllowedPath(validated.segments)) {
     return NextResponse.json(
       { error: 'Only public TMDB content GET endpoints are mirrored.' },
       { status: 404 },
     )
   }
 
-  const endpoint = `/${cleanPath.map(encodeURIComponent).join('/')}`
+  const { endpoint } = validated
   const query = canonicalQuery(req.nextUrl.searchParams)
   const cacheKey = `${endpoint}?${query}`
   const refresh = req.nextUrl.searchParams.get('refresh') === 'true'
