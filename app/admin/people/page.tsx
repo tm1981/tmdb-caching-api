@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
+import { requireAdmin } from '@/lib/auth'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -38,6 +39,7 @@ export default async function PeoplePage({
 }: {
   searchParams: Promise<{ q?: string; page?: string }>
 }) {
+  await requireAdmin()
   const params = await searchParams
   const search = params.q || ''
   const page = parseInt(params.page || '1')

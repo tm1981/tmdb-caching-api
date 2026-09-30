@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
+import { requireAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { getPosterPath } from '@/lib/tmdb'
 import { getCachedTmdb } from '@/lib/tmdb-cache'
@@ -136,6 +137,7 @@ export default async function PersonDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireAdmin()
   const { id } = await params
   const personId = parseInt(id)
 

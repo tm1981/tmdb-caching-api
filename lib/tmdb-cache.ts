@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { tmdbRawRequest } from '@/lib/tmdb'
 import { retryPrismaUniqueConflict } from '@/lib/prisma-conflict'
-import { scheduleCachedDataLimitEnforcement } from '@/lib/cache-limit'
+import { scheduleCachedDataLimitEnforcement, scheduleSearchCaptureLimitEnforcement } from '@/lib/cache-limit'
 import {
   isSearchCaptureSourcePath,
   isUnresolvedSearchPayload,
@@ -87,6 +87,7 @@ export async function syncSearchCapture(endpoint: string, query: string, payload
       lastSeen: now,
     },
   })
+  if (!existing) scheduleSearchCaptureLimitEnforcement()
 }
 
 export async function setSearchCaptureDismissed(endpoint: string, query: string, dismissed: boolean) {

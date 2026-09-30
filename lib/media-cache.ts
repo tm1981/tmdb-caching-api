@@ -30,12 +30,14 @@ function cacheDirectory() {
   return path.join(/* turbopackIgnore: true */ process.cwd(), 'data', 'media')
 }
 
+// Sizes TMDB's image CDN serves (its /configuration list plus w200/w400); any other size
+// is rejected upstream, so accepting it would only let callers bypass the cache.
+const TMDB_IMAGE_SIZES = new Set([
+  'original', 'w45', 'w92', 'w154', 'w185', 'w200', 'w300', 'w342', 'w400', 'w500', 'w780', 'w1280', 'h632',
+])
+
 function validSize(size: string) {
-  if (size === 'original') return true
-  const match = /^(?:w|h)(\d{2,4})$/.exec(size)
-  if (!match) return false
-  const pixels = Number(match[1])
-  return pixels >= 32 && pixels <= 2000
+  return TMDB_IMAGE_SIZES.has(size)
 }
 
 function validSegment(segment: string) {

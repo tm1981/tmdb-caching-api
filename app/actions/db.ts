@@ -15,6 +15,7 @@ import {
   getCachedDataCounts,
   PRESERVED_TMDB_CACHE_PATHS,
   scheduleCachedDataLimitEnforcement,
+  SEARCH_CAPTURE_MAX_ROWS,
   TMDB_CACHE_MAX_ROWS,
 } from '@/lib/cache-limit'
 import {
@@ -206,6 +207,7 @@ export async function getSearchFixes(options?: SearchFixesOptions): Promise<Sear
     }),
     prisma.tmdbCache.findMany({
       where: { path: SEARCH_CAPTURE_PATH },
+      take: SEARCH_CAPTURE_MAX_ROWS,
       orderBy: { updatedAt: 'desc' },
       select: { payload: true, updatedAt: true },
     }),

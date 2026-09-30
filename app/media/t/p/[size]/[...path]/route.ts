@@ -23,7 +23,7 @@ export async function GET(
       after(() => trimMediaCache().catch(error => console.warn('Media cache trim failed:', error)))
     }
 
-    return new NextResponse(Uint8Array.from(media.body).buffer, {
+    return new NextResponse(new Uint8Array(media.body), {
       headers: {
         'cache-control': CACHE_CONTROL,
         'content-type': media.contentType,

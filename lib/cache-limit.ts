@@ -11,8 +11,17 @@ const EVICTION_BATCH_SIZE = 1_000
 const ENFORCEMENT_INTERVAL_MS = 60_000
 const OVERFLOW_RETRY_MS = 1_000
 
+const parsedCaptureLimit = Number(process.env.SEARCH_CAPTURE_MAX_ROWS)
+
+// Any API key can create capture rows by searching for nonsense, so they get their own cap.
+export const SEARCH_CAPTURE_MAX_ROWS = Number.isInteger(parsedCaptureLimit) && parsedCaptureLimit > 0
+  ? parsedCaptureLimit
+  : 10_000
+
 export const PRESERVED_TMDB_CACHE_PATHS = [SEARCH_MAPPING_PATH, SEARCH_CAPTURE_PATH]
 
+let captureTrimPromise: Promise<void> | null = null
+let lastCaptureTrimStartedAt = 0
 let enforcementPromise: Promise<void> | null = null
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 let lastEnforcementStartedAt = 0
@@ -164,6 +173,42 @@ export function scheduleCachedDataLimitEnforcement(force = false) {
       // A zero-progress batch should not create an endless retry loop.
       // A later cache write will schedule another ordinary check.
       if (deleted > 0 && remainingOverflow > 0) queueOverflowRetry()
+    })
+}
+
+async function trimSearchCaptures() {
+  let overflow = await prisma.tmdbCache.count({ where: { path: SEARCH_CAPTURE_PATH } }) - SEARCH_CAPTURE_MAX_ROWS
+
+  while (overflow > 0) {
+    const rows = await prisma.tmdbCache.findMany({
+      where: { path: SEARCH_CAPTURE_PATH },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: Math.min(overflow, EVICTION_BATCH_SIZE),
+      select: { id: true },
+    })
+    if (!rows.length) return
+
+    const deleted = (await prisma.tmdbCache.deleteMany({
+      where: { id: { in: rows.map(row => row.id) } },
+    })).count
+    if (!deleted) return
+    overflow -= deleted
+  }
+}
+
+export function scheduleSearchCaptureLimitEnforcement() {
+  if (captureTrimPromise) return
+
+  const now = Date.now()
+  if (now - lastCaptureTrimStartedAt < ENFORCEMENT_INTERVAL_MS) return
+  lastCaptureTrimStartedAt = now
+
+  captureTrimPromise = trimSearchCaptures()
+    .catch(error => {
+      console.warn('Search capture limit enforcement failed:', error)
+    })
+    .finally(() => {
+      captureTrimPromise = null
     })
 }
 

@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
+import { requireAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { getCachedTmdb } from '@/lib/tmdb-cache'
@@ -16,6 +17,7 @@ export default async function RawTmdbPage({
   params: Promise<{ path: string[] }>
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
+  await requireAdmin()
   const { path } = await params
   const query = await searchParams
   const validated = tmdbEndpoint(path)

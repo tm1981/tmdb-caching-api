@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
+import { requireAdmin } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import prisma from '@/lib/prisma'
 import { getPosterPath, getBackdropPath, getTvDetails, extractTvDataFull } from '@/lib/tmdb'
@@ -193,6 +194,7 @@ export default async function TvDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireAdmin()
   const { id } = await params
   const tmdbId = parseInt(id)
 
