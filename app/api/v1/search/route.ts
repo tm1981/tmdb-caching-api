@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { containsText } from '@/lib/text-search'
 import { getPosterPath } from '@/lib/tmdb'
 import { canonicalParams, getCachedTmdb, queueSearchCapture } from '@/lib/tmdb-cache'
 import { withApiUsage } from '@/lib/api-usage'
@@ -66,8 +67,8 @@ async function search(req: NextRequest) {
     prisma.movie.findMany({
       where: {
         OR: [
-          { title: { contains: query } },
-          { originalTitle: { contains: query } },
+          { title: containsText(query) },
+          { originalTitle: containsText(query) },
         ],
       },
       take: 20,
@@ -86,8 +87,8 @@ async function search(req: NextRequest) {
     prisma.tvShow.findMany({
       where: {
         OR: [
-          { name: { contains: query } },
-          { originalName: { contains: query } },
+          { name: containsText(query) },
+          { originalName: containsText(query) },
         ],
       },
       take: 20,

@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      # Placeholders: lint, tests, and the build never connect to a database or TMDB.
+      DATABASE_PROVIDER: postgresql
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      NEXTAUTH_SECRET: ci-placeholder
+      TMDB_API_KEY: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Validate both Prisma schemas
+        run: |
+          npx prisma validate
+          DATABASE_PROVIDER=mysql DATABASE_URL=mysql://ci:ci@localhost:3306/ci npx prisma validate
+      - run: npm run lint
+      - run: npm test
+      - name: Type-check against the MySQL client
+        run: |
+          DATABASE_PROVIDER=mysql DATABASE_URL=mysql://ci:ci@localhost:3306/ci npx prisma generate
+          npx tsc --noEmit
+      - name: Build (PostgreSQL client)
+        run: npm run build

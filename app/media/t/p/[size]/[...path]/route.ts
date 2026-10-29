@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
+import { Readable } from 'node:stream'
 import { after, NextResponse } from 'next/server'
 import {
   getCachedMedia,
@@ -13,7 +14,7 @@ import { describeNetworkError, isNetworkError, networkErrorStatus } from '@/lib/
 const CACHE_CONTROL = 'public, max-age=31536000, immutable'
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ size: string; path: string[] }> },
 ) {
   const { size, path } = await params
@@ -24,12 +25,28 @@ export async function GET(
       after(() => trimMediaCache().catch(error => console.warn('Media cache trim failed:', error)))
     }
 
-    return new NextResponse(new Uint8Array(media.body), {
+    const headers = {
+      'cache-control': CACHE_CONTROL,
+      etag: media.etag,
+      'x-content-type-options': 'nosniff',
+      'x-media-cache': media.cache,
+    }
+
+    if (request.headers.get('if-none-match') === media.etag) {
+      await media.file?.close()
+      return new NextResponse(null, { status: 304, headers })
+    }
+
+    // The read stream closes the file handle when it ends or the client disconnects.
+    const body = media.cache === 'hit'
+      ? Readable.toWeb(media.file.createReadStream()) as ReadableStream<Uint8Array>
+      : new Uint8Array(media.body)
+
+    return new NextResponse(body, {
       headers: {
-        'cache-control': CACHE_CONTROL,
+        ...headers,
+        'content-length': String(media.size),
         'content-type': media.contentType,
-        'x-content-type-options': 'nosniff',
-        'x-media-cache': media.cache,
         ...(media.contentType === 'image/svg+xml' && { 'content-security-policy': "sandbox; default-src 'none'" }),
       },
     })

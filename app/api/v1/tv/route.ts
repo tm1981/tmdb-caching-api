@@ -1,7 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
+import { containsText } from '@/lib/text-search'
 import { MAX_PAGE, pageOutOfRangeResponse, paginationParams } from '@/lib/pagination'
 import { withApiUsage } from '@/lib/api-usage'
 import { LOCAL_LIST_CACHE_CONTROL } from '@/lib/cache-ttl'
@@ -15,11 +17,11 @@ async function getTvShows(req: NextRequest) {
   )
   if (page > MAX_PAGE) return pageOutOfRangeResponse(MAX_PAGE)
   const query = searchParams.get('q') || ''
-  const where: any = {}
+  const where: Prisma.TvShowWhereInput = {}
   if (query) {
     where.OR = [
-      { name: { contains: query } },
-      { originalName: { contains: query } },
+      { name: containsText(query) },
+      { originalName: containsText(query) },
     ]
   }
 

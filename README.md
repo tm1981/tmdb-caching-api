@@ -305,6 +305,12 @@ PORT=3000 npm run start
 
 The app uses the normal Next.js production server via `next start`. Set `NEXTAUTH_URL` to the public HTTPS domain in production.
 
+The server refuses to serve requests (and logs which ones are missing) when `DATABASE_URL`, `TMDB_API_KEY`, or
+`NEXTAUTH_SECRET` is unset.
+
+`GET /api/health` needs no API key and returns `200 {"status":"ok"}` when the database answers, or `503` when it
+does not. Point uptime monitors at it.
+
 ## Reverse Proxy and Client IPs
 
 The client IP is used for request logs, IP blocking, and login throttling. Clients can put anything at the start of the `X-Forwarded-For` header, so the app ignores those entries. It counts `TRUSTED_PROXY_COUNT` entries in from the right end of the header and uses that one: the address added by your outermost trusted proxy.

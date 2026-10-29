@@ -6,7 +6,9 @@ import { requireAdmin } from '@/lib/auth'
 import { hashApiKey } from '@/lib/api-keys'
 import { getDatabaseProvider } from '@/lib/database-provider'
 import { validIpAddress } from '@/lib/ip-address'
+import { mapWithConcurrency } from '@/lib/concurrency'
 import prisma from '@/lib/prisma'
+import { containsText } from '@/lib/text-search'
 import { paginationParams } from '@/lib/pagination'
 import { clearUsageDashboardCache } from '@/lib/usage-dashboard'
 import { getCachedTmdb, setSearchCaptureDismissed, upsertTmdbCache } from '@/lib/tmdb-cache'
@@ -54,8 +56,8 @@ export async function getMovies(page = 1, limit = 20, query = '') {
   const where: any = {}
   if (query) {
     where.OR = [
-      { title: { contains: query } },
-      { originalTitle: { contains: query } },
+      { title: containsText(query) },
+      { originalTitle: containsText(query) },
     ]
   }
 
@@ -95,8 +97,8 @@ export async function getTvShows(page = 1, limit = 20, query = '') {
   const where: any = {}
   if (query) {
     where.OR = [
-      { name: { contains: query } },
-      { originalName: { contains: query } },
+      { name: containsText(query) },
+      { originalName: containsText(query) },
     ]
   }
 
@@ -791,13 +793,7 @@ export async function warmupTmdbCache(type: TmdbWarmupType, pages = 1) {
 
 export async function refreshMovieFromTmdb(tmdbId: number) {
   await requireAdmin()
-  const data = await getMovieDetails(tmdbId)
-  const movieData = extractMovieData(data)
-  await prisma.movie.upsert({
-    where: { tmdbId: data.id },
-    create: movieData,
-    update: movieData,
-  })
+  await upsertMovieFromTmdb(tmdbId)
   scheduleCachedDataLimitEnforcement()
   await getCachedTmdb(`/movie/${tmdbId}`, { append_to_response: 'credits,videos', language: 'en-US' }, true)
   revalidatePath(`/admin/movies/${tmdbId}`)
@@ -807,13 +803,7 @@ export async function refreshMovieFromTmdb(tmdbId: number) {
 
 export async function refreshTvFromTmdb(tmdbId: number) {
   await requireAdmin()
-  const data = await getTvDetails(tmdbId)
-  const tvData = await extractTvDataFull(data, tmdbId)
-  await prisma.tvShow.upsert({
-    where: { tmdbId: data.id },
-    create: tvData,
-    update: tvData,
-  })
+  await upsertTvFromTmdb(tmdbId)
   scheduleCachedDataLimitEnforcement()
   await getCachedTmdb(`/tv/${tmdbId}`, { append_to_response: 'credits,videos', language: 'en-US' }, true)
   revalidatePath(`/admin/tv/${tmdbId}`)
@@ -833,26 +823,34 @@ export async function refreshPersonFromTmdb(personId: number) {
 }
 
 // Sync Operations
-export async function syncTrendingMovies() {
-  await requireAdmin()
-  const { results } = await getTrendingMovies('day')
-  let success = 0
-  let errors = 0
+// Each TV item also fetches its seasons, so a handful in flight stays well under TMDB's rate limit.
+const SYNC_CONCURRENCY = 6
 
-  for (const item of results) {
-    try {
-      const data = await getMovieDetails(item.id)
-      const movieData = extractMovieData(data)
-      await prisma.movie.upsert({
-        where: { tmdbId: data.id },
-        create: movieData,
-        update: movieData,
-      })
-      success++
-    } catch {
-      errors++
-    }
-  }
+async function upsertMovieFromTmdb(tmdbId: number) {
+  const data = await getMovieDetails(tmdbId)
+  const movieData = extractMovieData(data)
+  await prisma.movie.upsert({
+    where: { tmdbId: data.id },
+    create: movieData,
+    update: movieData,
+  })
+}
+
+async function upsertTvFromTmdb(tmdbId: number) {
+  const data = await getTvDetails(tmdbId)
+  const tvData = await extractTvDataFull(data, tmdbId)
+  await prisma.tvShow.upsert({
+    where: { tmdbId: data.id },
+    create: tvData,
+    update: tvData,
+  })
+}
+
+async function bulkSync(kind: 'movie' | 'tv', label: string, items: Array<{ id: number }>) {
+  const upsert = kind === 'movie' ? upsertMovieFromTmdb : upsertTvFromTmdb
+  const outcomes = await mapWithConcurrency(items, SYNC_CONCURRENCY, item => upsert(item.id).then(() => true, () => false))
+  const success = outcomes.filter(Boolean).length
+  const errors = outcomes.length - success
 
   scheduleCachedDataLimitEnforcement()
 
@@ -860,119 +858,35 @@ export async function syncTrendingMovies() {
     data: {
       type: 'bulk',
       status: errors ? (success ? 'partial' : 'error') : 'success',
-      detail: `Synced ${success} trending movies (${errors} errors)`,
+      detail: `Synced ${success} ${label} (${errors} errors)`,
     },
   })
 
   revalidatePath('/admin/sync')
-  revalidatePath('/admin/movies')
+  revalidatePath(kind === 'movie' ? '/admin/movies' : '/admin/tv')
   return { success, errors }
+}
+
+export async function syncTrendingMovies() {
+  await requireAdmin()
+  const { results } = await getTrendingMovies('day')
+  return bulkSync('movie', 'trending movies', results)
 }
 
 export async function syncTrendingTv() {
   await requireAdmin()
   const { results } = await getTrendingTv('day')
-  let success = 0
-  let errors = 0
-
-  for (const item of results) {
-    try {
-      const data = await getTvDetails(item.id)
-      const tvData = await extractTvDataFull(data, item.id)
-      await prisma.tvShow.upsert({
-        where: { tmdbId: data.id },
-        create: tvData,
-        update: tvData,
-      })
-      success++
-    } catch {
-      errors++
-    }
-  }
-
-  scheduleCachedDataLimitEnforcement()
-
-  await prisma.syncLog.create({
-    data: {
-      type: 'bulk',
-      status: errors ? (success ? 'partial' : 'error') : 'success',
-      detail: `Synced ${success} trending TV shows (${errors} errors)`,
-    },
-  })
-
-  revalidatePath('/admin/sync')
-  revalidatePath('/admin/tv')
-  return { success, errors }
+  return bulkSync('tv', 'trending TV shows', results)
 }
 
 export async function syncTopRatedMovies() {
   await requireAdmin()
   const { results } = await getTopRatedMovies(1)
-  let success = 0
-  let errors = 0
-
-  for (const item of results) {
-    try {
-      const data = await getMovieDetails(item.id)
-      const movieData = extractMovieData(data)
-      await prisma.movie.upsert({
-        where: { tmdbId: data.id },
-        create: movieData,
-        update: movieData,
-      })
-      success++
-    } catch {
-      errors++
-    }
-  }
-
-  scheduleCachedDataLimitEnforcement()
-
-  await prisma.syncLog.create({
-    data: {
-      type: 'bulk',
-      status: errors ? (success ? 'partial' : 'error') : 'success',
-      detail: `Synced ${success} top rated movies (${errors} errors)`,
-    },
-  })
-
-  revalidatePath('/admin/sync')
-  revalidatePath('/admin/movies')
-  return { success, errors }
+  return bulkSync('movie', 'top rated movies', results)
 }
 
 export async function syncTopRatedTv() {
   await requireAdmin()
   const { results } = await getTopRatedTv(1)
-  let success = 0
-  let errors = 0
-
-  for (const item of results) {
-    try {
-      const data = await getTvDetails(item.id)
-      const tvData = await extractTvDataFull(data, item.id)
-      await prisma.tvShow.upsert({
-        where: { tmdbId: data.id },
-        create: tvData,
-        update: tvData,
-      })
-      success++
-    } catch {
-      errors++
-    }
-  }
-
-  scheduleCachedDataLimitEnforcement()
-
-  await prisma.syncLog.create({
-    data: {
-      type: 'bulk',
-      status: errors ? (success ? 'partial' : 'error') : 'success',
-      detail: `Synced ${success} top rated TV shows (${errors} errors)`,
-    },
-  })
-
-  revalidatePath('/admin/sync')
-  revalidatePath('/admin/tv')
-  return { success, errors }
+  return bulkSync('tv', 'top rated TV shows', results)
 }

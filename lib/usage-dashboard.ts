@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client'
 import { requireAdmin } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { containsText } from '@/lib/text-search'
 import { createStaleWhileRevalidateCache } from '@/lib/stale-cache'
 import {
   countryName,
@@ -369,12 +370,12 @@ export async function getUsageDashboard(input: DashboardInput = {}) {
   if (search) {
     logWhereParts.push({
       OR: [
-        { endpoint: { contains: search } },
-        { query: { contains: search } },
-        { ipAddress: { contains: search } },
-        { apiKeyLabel: { contains: search } },
-        { apiKeyPrefix: { contains: search } },
-        { rateLimitSource: { contains: search } },
+        { endpoint: containsText(search) },
+        { query: containsText(search) },
+        { ipAddress: containsText(search) },
+        { apiKeyLabel: containsText(search) },
+        { apiKeyPrefix: containsText(search) },
+        { rateLimitSource: containsText(search) },
         ...(matchedCountries.length ? [{ countryCode: { in: matchedCountries } }] : []),
       ],
     })

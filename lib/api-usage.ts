@@ -15,6 +15,7 @@ const KEY_ID_HEADER = 'x-tmdb-usage-key-id'
 const KEY_LABEL_HEADER = 'x-tmdb-usage-key-label'
 const KEY_PREFIX_HEADER = 'x-tmdb-usage-key-prefix'
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1000
+const SYNC_LOG_RETENTION_MS = 90 * 24 * 60 * 60 * 1000
 
 type ApiKeySnapshot = {
   id: number
@@ -97,9 +98,15 @@ async function persistUsage(data: UsageWrite) {
   const day = data.createdAt.toISOString().slice(0, 10)
   if (day === lastPruneDay) return
   // ponytail: per-process daily cleanup is enough for this app; use a scheduled job if log volume grows.
-  await prisma.apiRequestLog.deleteMany({
-    where: { createdAt: { lt: new Date(data.createdAt.getTime() - RETENTION_MS) } },
-  })
+  await Promise.all([
+    prisma.apiRequestLog.deleteMany({
+      where: { createdAt: { lt: new Date(data.createdAt.getTime() - RETENTION_MS) } },
+    }),
+    // Every lazy sync adds a SyncLog row, so they are pruned on the same daily pass.
+    prisma.syncLog.deleteMany({
+      where: { createdAt: { lt: new Date(data.createdAt.getTime() - SYNC_LOG_RETENTION_MS) } },
+    }),
+  ])
   lastPruneDay = day
 }
 

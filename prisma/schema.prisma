@@ -82,6 +82,9 @@ model Movie {
   seasons             Json?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+
+  @@index([title])
+  @@index([updatedAt])
 }
 
 model TvShow {
@@ -107,6 +110,9 @@ model TvShow {
   seasons          Json?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+
+  @@index([name])
+  @@index([updatedAt])
 }
 
 model SyncLog {
@@ -116,6 +122,8 @@ model SyncLog {
   status    String
   detail    String?
   createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model TmdbCache {

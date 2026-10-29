@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, open, readdir, rename, rm, stat, writeFile, type FileHandle } from 'node:fs/promises'
 import path from 'node:path'
 import { withNetworkRetry } from './upstream-fetch.ts'
 
@@ -11,17 +11,22 @@ const MIN_TRIM_INTERVAL_MS = 5 * 60 * 1000
 const EMERGENCY_OVERAGE_FACTOR = 1.1
 const FILE_STAT_CONCURRENCY = 16
 const MEDIA_FETCH_TIMEOUT_MS = 30_000
-const inflight = new Map<string, Promise<CachedMedia>>()
+const inflight = new Map<string, Promise<Buffer>>()
 let trimPromise: Promise<void> | null = null
 let knownCacheBytes: number | null = null
 let additionsDuringScan: Map<string, number> | null = null
 let lastTrimCompletedAt = 0
 
+// A hit hands back an open file so the route can stream it (and a concurrent trim deleting
+// the file cannot break the response); a miss returns the bytes it just downloaded.
 export type CachedMedia = {
-  body: Buffer
   contentType: string
-  cache: 'hit' | 'miss'
-}
+  size: number
+  etag: string
+} & (
+  | { cache: 'hit'; file: FileHandle; body?: never }
+  | { cache: 'miss'; body: Buffer; file?: never }
+)
 
 function positiveBytes(value: string | undefined, fallback: number) {
   const parsed = Number(value)
@@ -98,26 +103,28 @@ async function downloadImage(upstreamUrl: string) {
   return { body, contentType }
 }
 
-async function fetchAndStore(
-  filename: string,
-  extension: string,
-  upstreamUrl: string,
-): Promise<CachedMedia> {
+async function openCachedFile(filename: string) {
+  let file: FileHandle
+  try {
+    file = await open(path.join(cacheDirectory(), filename), 'r')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+  try {
+    return { file, size: (await file.stat()).size }
+  } catch (error) {
+    await file.close()
+    throw error
+  }
+}
+
+async function fetchAndStore(filename: string, upstreamUrl: string): Promise<Buffer> {
   const directory = cacheDirectory()
   const destination = path.join(directory, filename)
 
-  try {
-    return {
-      body: await readFile(destination),
-      contentType: contentTypeFor(extension),
-      cache: 'hit',
-    }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-  }
-
   // TMDB's image CDN occasionally resets connections; one retry covers the whole download.
-  const { body, contentType } = await withNetworkRetry(() => downloadImage(upstreamUrl))
+  const { body } = await withNetworkRetry(() => downloadImage(upstreamUrl))
 
   await mkdir(directory, { recursive: true })
   const temporary = path.join(directory, `.${filename}.${randomUUID()}.tmp`)
@@ -132,7 +139,7 @@ async function fetchAndStore(
   if (knownCacheBytes !== null) knownCacheBytes += body.length
   additionsDuringScan?.set(filename, body.length)
 
-  return { body, contentType, cache: 'miss' }
+  return body
 }
 
 export class InvalidMediaPathError extends Error {}
@@ -146,17 +153,26 @@ export class MediaUpstreamError extends Error {
   }
 }
 
-export async function getCachedMedia(size: string, mediaPath: string[]) {
+export async function getCachedMedia(size: string, mediaPath: string[]): Promise<CachedMedia> {
   const request = validatedRequest(size, mediaPath)
   if (!request) throw new InvalidMediaPathError('Invalid TMDB media path')
 
-  const existing = inflight.get(request.key)
-  if (existing) return existing
+  const contentType = contentTypeFor(request.extension)
+  // The filename hashes the TMDB path, and TMDB image paths are immutable, so it is a stable ETag.
+  const etag = `"${request.filename}"`
 
-  const pending = fetchAndStore(request.filename, request.extension, request.upstreamUrl)
-    .finally(() => inflight.delete(request.key))
-  inflight.set(request.key, pending)
-  return pending
+  const cached = await openCachedFile(request.filename)
+  if (cached) return { ...cached, contentType, etag, cache: 'hit' }
+
+  // Concurrent misses share one download; each caller opens its own file on later hits.
+  let pending = inflight.get(request.key)
+  if (!pending) {
+    pending = fetchAndStore(request.filename, request.upstreamUrl)
+      .finally(() => inflight.delete(request.key))
+    inflight.set(request.key, pending)
+  }
+  const body = await pending
+  return { body, size: body.length, contentType, etag, cache: 'miss' }
 }
 
 type MediaFileDetails = {
