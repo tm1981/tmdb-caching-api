@@ -83,13 +83,28 @@ Mapped movie/TV searches also return `x-tmdb-search-mapped: true`. Clients may t
 
 The normalized movie, TV, and search endpoints use the same values whenever cache state is known. `bypass` means the request did not use a reusable cache result.
 
-Use `refresh=true` to bypass the local cache and replace it on a successful TMDB response:
+### Freshness
 
-```http
-GET /api/v1/tmdb/movie/278?append_to_response=credits,videos&refresh=true
-```
+Cached responses are served immediately. Once a row is older than its freshness window it is still served, with
+`x-tmdb-cache-stale: true`, and the service refetches it from TMDB in the background:
 
-`refresh` is not forwarded to TMDB and is not part of the cache key.
+| Path | Fresh for |
+|---|---|
+| `/trending/*`, `*/latest` | 1 hour |
+| `/discover/*`, `popular`, `now_playing`, `upcoming`, `top_rated`, `airing_today`, `on_the_air` lists | 6 hours |
+| `/search/*`, `/find/*` | 1 day |
+| `/configuration`, `/genre/*`, `/certification/*`, `/watch/providers/*` | 7 days |
+| Details (`/movie/{id}`, `/tv/{id}`, `/person/{id}`, ...) and `/api/v1/movies/{id}`, `/api/v1/tv/{id}` | 3 days |
+
+Successful responses carry `Cache-Control: private, max-age=...` (at most one hour) so API clients can reuse them
+locally. They are `private` on purpose: a shared cache such as Cloudflare would otherwise serve key-gated responses
+without the API-key check or usage logging.
+
+`refresh=true` is no longer honored for API clients; administrators refresh items from the admin pages. The
+parameter is still ignored for the cache key and is not forwarded to TMDB.
+
+Page numbers above 10,000 on `/api/v1/movies` and `/api/v1/tv`, and above 500 on `/api/v1/search` (TMDB's limit),
+return `400`.
 
 ## Cached Content Paths
 

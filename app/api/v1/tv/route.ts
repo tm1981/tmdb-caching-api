@@ -2,8 +2,9 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { paginationParams } from '@/lib/pagination'
+import { MAX_PAGE, pageOutOfRangeResponse, paginationParams } from '@/lib/pagination'
 import { withApiUsage } from '@/lib/api-usage'
+import { LOCAL_LIST_CACHE_CONTROL } from '@/lib/cache-ttl'
 
 async function getTvShows(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams
@@ -12,6 +13,7 @@ async function getTvShows(req: NextRequest) {
     searchParams.get('page') || undefined,
     searchParams.get('limit') || undefined,
   )
+  if (page > MAX_PAGE) return pageOutOfRangeResponse(MAX_PAGE)
   const query = searchParams.get('q') || ''
   const where: any = {}
   if (query) {
@@ -51,7 +53,7 @@ async function getTvShows(req: NextRequest) {
         totalPages: Math.ceil(total / limit),
       },
     },
-    { headers: { 'x-tmdb-cache': 'hit' } },
+    { headers: { 'x-tmdb-cache': 'hit', 'cache-control': LOCAL_LIST_CACHE_CONTROL } },
   )
 }
 

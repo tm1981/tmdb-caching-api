@@ -8,6 +8,8 @@ import { scheduleCachedDataLimitEnforcement } from '@/lib/cache-limit'
 import { retryPrismaUniqueConflict } from '@/lib/prisma-conflict'
 import { tmdbFetchErrorResponse } from '@/lib/tmdb-errors'
 import { parseTmdbId } from '@/lib/tmdb-path'
+import { DETAIL_TTL_MS, privateCacheControl } from '@/lib/cache-ttl'
+import { isStaleDetail, refreshMovieInBackground } from '@/lib/detail-refresh'
 
 async function getMovie(
   _req: NextRequest,
@@ -24,6 +26,8 @@ async function getMovie(
     where: { tmdbId },
   })
   let cacheStatus = 'hit'
+  const stale = Boolean(movie && isStaleDetail(movie.updatedAt))
+  if (stale) refreshMovieInBackground(tmdbId)
 
   if (!movie) {
     cacheStatus = 'miss'
@@ -115,7 +119,13 @@ async function getMovie(
       posters: [],
       backdrops: [],
     },
-  }, { headers: { 'x-tmdb-cache': cacheStatus } })
+  }, {
+    headers: {
+      'x-tmdb-cache': cacheStatus,
+      'cache-control': privateCacheControl(DETAIL_TTL_MS, movie.updatedAt),
+      ...(stale && { 'x-tmdb-cache-stale': 'true' }),
+    },
+  })
 }
 
 export const GET = withApiUsage(getMovie)

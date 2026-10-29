@@ -6,7 +6,13 @@ import { tmdbRawRequest } from '@/lib/tmdb'
 import { tmdbEndpoint } from '@/lib/tmdb-path'
 import { withApiUsage } from '@/lib/api-usage'
 import { withLocalMediaConfiguration } from '@/lib/media-cache'
-import { queueSearchCapture, upsertTmdbCache } from '@/lib/tmdb-cache'
+import { privateCacheControl, tmdbCacheTtlMs } from '@/lib/cache-ttl'
+import {
+  isStaleTmdbCache,
+  queueSearchCapture,
+  refreshTmdbCacheInBackground,
+  upsertTmdbCache,
+} from '@/lib/tmdb-cache'
 import {
   applyManualSearchMapping,
   manualSearchCacheKey,
@@ -60,6 +66,8 @@ function isAllowedPath(path: string[]) {
 
 function canonicalQuery(searchParams: URLSearchParams) {
   const params = new URLSearchParams(searchParams)
+  // `refresh` is no longer honored for API clients (stale rows refetch on their own), but it stays
+  // out of the cache key and the upstream request so older clients keep hitting the same rows.
   params.delete('refresh')
   return [...params.entries()]
     .sort(([aKey, aValue], [bKey, bValue]) => aKey.localeCompare(bKey) || aValue.localeCompare(bValue))
@@ -84,7 +92,6 @@ async function getTmdb(
   const { endpoint } = validated
   const query = canonicalQuery(req.nextUrl.searchParams)
   const cacheKey = `${endpoint}?${query}`
-  const refresh = req.nextUrl.searchParams.get('refresh') === 'true'
 
   if (cacheKey.length > MAX_TMDB_CACHE_KEY_LENGTH) {
     return NextResponse.json(
@@ -111,16 +118,21 @@ async function getTmdb(
     ? withLocalMediaConfiguration(payload, req.nextUrl.origin)
     : payload
 
-  if (!refresh) {
-    const cached = await prisma.tmdbCache.findUnique({ where: { cacheKey } })
-    if (cached) {
-      const mapping = parseManualSearchMapping((await mappingPromise)?.payload)
-      if (mappedSearch) queueSearchCapture(endpoint, searchText, cached.payload, 'hit', Boolean(mapping))
-      return NextResponse.json(responsePayload(applyManualSearchMapping(cached.payload, mapping, expectedMediaType)), {
-        status: cached.status,
-        headers: tmdbSearchResponseHeaders('hit', mapping, expectedMediaType),
-      })
-    }
+  const ttlMs = tmdbCacheTtlMs(endpoint)
+  const cached = await prisma.tmdbCache.findUnique({ where: { cacheKey } })
+  if (cached) {
+    const stale = isStaleTmdbCache(endpoint, cached.updatedAt)
+    if (stale) refreshTmdbCacheInBackground(endpoint, query)
+    const mapping = parseManualSearchMapping((await mappingPromise)?.payload)
+    if (mappedSearch) queueSearchCapture(endpoint, searchText, cached.payload, 'hit', Boolean(mapping))
+    return NextResponse.json(responsePayload(applyManualSearchMapping(cached.payload, mapping, expectedMediaType)), {
+      status: cached.status,
+      headers: {
+        ...tmdbSearchResponseHeaders('hit', mapping, expectedMediaType),
+        'cache-control': privateCacheControl(ttlMs, cached.updatedAt),
+        ...(stale && { 'x-tmdb-cache-stale': 'true' }),
+      },
+    })
   }
 
   const upstreamParams = new URLSearchParams(query)
@@ -142,6 +154,7 @@ async function getTmdb(
     status: result.status,
     headers: {
       ...tmdbSearchResponseHeaders(result.ok ? 'miss' : 'bypass', mapping, expectedMediaType),
+      'cache-control': result.ok ? privateCacheControl(ttlMs) : 'no-store',
       ...(result.status === 429 && {
         'x-ratelimit-source': 'tmdb',
         'retry-after': result.retryAfter || '60',

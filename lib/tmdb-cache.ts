@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import { tmdbRawRequest } from '@/lib/tmdb'
 import { retryPrismaUniqueConflict } from '@/lib/prisma-conflict'
 import { scheduleCachedDataLimitEnforcement, scheduleSearchCaptureLimitEnforcement } from '@/lib/cache-limit'
+import { isCacheStale, tmdbCacheTtlMs } from '@/lib/cache-ttl'
 import {
   isSearchCaptureSourcePath,
   isUnresolvedSearchPayload,
@@ -45,6 +46,39 @@ export async function upsertTmdbCache(data: TmdbCacheWrite) {
   )
   scheduleCachedDataLimitEnforcement()
   return cached
+}
+
+// Single-flight per process so a burst of stale hits triggers one upstream refetch.
+const backgroundRefreshes = new Map<string, Promise<void>>()
+
+async function refetchTmdbCache(endpoint: string, query: string) {
+  const result = await tmdbRawRequest(endpoint, new URLSearchParams(query))
+  // Failed refetches keep serving the stale copy; only successful responses are cached.
+  if (!result.ok) return
+  await upsertTmdbCache({
+    cacheKey: `${endpoint}?${query}`,
+    path: endpoint,
+    query,
+    status: result.status,
+    payload: result.payload,
+  })
+}
+
+// Refetches a stale cache row after the response is sent.
+export function refreshTmdbCacheInBackground(endpoint: string, query: string) {
+  const cacheKey = `${endpoint}?${query}`
+  after(async () => {
+    if (backgroundRefreshes.has(cacheKey)) return
+    const refresh = refetchTmdbCache(endpoint, query)
+      .catch(error => console.warn(`Background TMDB refresh failed for ${endpoint}:`, error))
+      .finally(() => backgroundRefreshes.delete(cacheKey))
+    backgroundRefreshes.set(cacheKey, refresh)
+    await refresh
+  })
+}
+
+export function isStaleTmdbCache(endpoint: string, updatedAt: Date) {
+  return isCacheStale(updatedAt, tmdbCacheTtlMs(endpoint))
 }
 
 export function canonicalParams(params: Record<string, string | number | undefined>) {
@@ -153,12 +187,15 @@ export async function getCachedTmdb<T>(
 
   if (!refresh) {
     const cached = await prisma.tmdbCache.findUnique({ where: { cacheKey } })
-    if (cached) return {
-      payload: cached.payload as T,
-      cache: 'hit' as const,
-      updatedAt: cached.updatedAt,
-      status: cached.status,
-      retryAfter: null,
+    if (cached) {
+      if (isStaleTmdbCache(endpoint, cached.updatedAt)) refreshTmdbCacheInBackground(endpoint, query)
+      return {
+        payload: cached.payload as T,
+        cache: 'hit' as const,
+        updatedAt: cached.updatedAt,
+        status: cached.status,
+        retryAfter: null,
+      }
     }
   }
 

@@ -4,6 +4,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { compare } from 'bcryptjs'
 import { createHash, randomInt, timingSafeEqual } from 'crypto'
 import nodemailer from 'nodemailer'
+import { ADMIN_SESSION_MAX_AGE_SECONDS, isActiveAdmin } from '@/lib/admin-session'
 import prisma from '@/lib/prisma'
 import { clientIp } from '@/lib/usage'
 
@@ -194,6 +195,8 @@ export const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: 'jwt',
+    // JWTs cannot be revoked, so keep their lifetime short; isActiveAdmin also re-checks the database.
+    maxAge: ADMIN_SESSION_MAX_AGE_SECONDS,
   },
   secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
@@ -214,8 +217,9 @@ export const authOptions: NextAuthOptions = {
 
 export async function requireAdmin() {
   const session = await getServerSession(authOptions)
+  const user = session?.user as SessionUser | undefined
 
-  if ((session?.user as SessionUser | undefined)?.role !== 'admin') {
+  if (user?.role !== 'admin' || !(await isActiveAdmin(user.id))) {
     throw new Error('Unauthorized')
   }
 

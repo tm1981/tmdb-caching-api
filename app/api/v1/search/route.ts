@@ -5,6 +5,8 @@ import prisma from '@/lib/prisma'
 import { getPosterPath } from '@/lib/tmdb'
 import { canonicalParams, getCachedTmdb, queueSearchCapture } from '@/lib/tmdb-cache'
 import { withApiUsage } from '@/lib/api-usage'
+import { MAX_TMDB_PAGE, pageOutOfRangeResponse } from '@/lib/pagination'
+import { LOCAL_LIST_CACHE_CONTROL } from '@/lib/cache-ttl'
 import {
   applyManualSearchMapping,
   manualSearchCacheKey,
@@ -48,6 +50,7 @@ async function search(req: NextRequest) {
   }
 
   const page = Math.max(parseInt(searchParams.get('page') || '1') || 1, 1)
+  if (page > MAX_TMDB_PAGE) return pageOutOfRangeResponse(MAX_TMDB_PAGE)
   const tmdbParams = {
     query,
     page,
@@ -179,6 +182,7 @@ async function search(req: NextRequest) {
   }, {
     headers: {
       'x-tmdb-cache': tmdb.cache,
+      'cache-control': upstreamLimit ? 'no-store' : LOCAL_LIST_CACHE_CONTROL,
       ...(upstreamLimit && {
         'x-ratelimit-source': 'tmdb',
         'retry-after': tmdb.retryAfter || '60',

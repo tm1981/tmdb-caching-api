@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
+import { isActiveAdmin } from '@/lib/admin-session'
 import { hashApiKey } from '@/lib/api-keys'
 import { queueProxyUsage, usageRequestHeaders } from '@/lib/api-usage'
 import { validIpAddress } from '@/lib/ip-address'
@@ -36,7 +37,14 @@ export async function proxy(request: NextRequest) {
       secret: process.env.NEXTAUTH_SECRET,
     })
 
-    if (token?.role !== 'admin') {
+    let isAdmin = false
+    try {
+      isAdmin = token?.role === 'admin' && await isActiveAdmin(token.id)
+    } catch {
+      return NextResponse.json({ error: 'Database error.' }, { status: 500 })
+    }
+
+    if (!isAdmin) {
       const loginUrl = new URL('/login', request.url)
       return NextResponse.redirect(loginUrl)
     }

@@ -8,6 +8,8 @@ import { scheduleCachedDataLimitEnforcement } from '@/lib/cache-limit'
 import { retryPrismaUniqueConflict } from '@/lib/prisma-conflict'
 import { tmdbFetchErrorResponse } from '@/lib/tmdb-errors'
 import { parseTmdbId } from '@/lib/tmdb-path'
+import { DETAIL_TTL_MS, privateCacheControl } from '@/lib/cache-ttl'
+import { isStaleDetail, refreshTvInBackground } from '@/lib/detail-refresh'
 
 async function getTvShow(
   _req: NextRequest,
@@ -24,6 +26,8 @@ async function getTvShow(
     where: { tmdbId },
   })
   let cacheStatus = 'hit'
+  const stale = Boolean(tvShow && isStaleDetail(tvShow.updatedAt))
+  if (stale) refreshTvInBackground(tmdbId)
 
   if (!tvShow) {
     cacheStatus = 'miss'
@@ -142,7 +146,13 @@ async function getTvShow(
         type: v.type,
       })) || [],
     },
-  }, { headers: { 'x-tmdb-cache': cacheStatus } })
+  }, {
+    headers: {
+      'x-tmdb-cache': cacheStatus,
+      'cache-control': privateCacheControl(DETAIL_TTL_MS, tvShow.updatedAt),
+      ...(stale && { 'x-tmdb-cache-stale': 'true' }),
+    },
+  })
 }
 
 export const GET = withApiUsage(getTvShow)
